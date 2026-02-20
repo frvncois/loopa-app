@@ -1,0 +1,5 @@
+<template>
+  <svg width="1em" height="1em" viewBox="0 -960 960 960" fill="currentColor" stroke="none">
+    <path d="M80-80v-80h800v80H80Zm200-160v-640h120v640H280Zm280 0v-400h120v400H560Z"/>
+  </svg>
+</template>

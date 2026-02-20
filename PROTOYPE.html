@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Loopa — Editor Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ================================================================
+   RESET & TOKENS
+   ================================================================ */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg-0:#0c0c0f;
+  --bg-1:#111114;
+  --bg-2:#17171b;
+  --bg-3:#1c1c22;
+  --bg-4:#222229;
+  --bg-5:#2a2a33;
+  --bg-6:#33333e;
+  --border:#252530;
+  --border-l:#2e2e3a;
+  --border-focus:#4353ff;
+  --text-1:#ededf0;
+  --text-2:#a0a0ae;
+  --text-3:#6a6a7e;
+  --text-4:#4a4a5c;
+  --accent:#4353ff;
+  --accent-h:#5c6aff;
+  --accent-s:rgba(67,83,255,.10);
+  --accent-g:rgba(67,83,255,.22);
+  --green:#34d399;
+  --yellow:#fbbf24;
+  --red:#f87171;
+  --red-s:rgba(248,113,113,.12);
+  --font:'DM Sans',system-ui,sans-serif;
+  --mono:'JetBrains Mono',monospace;
+  --ease:140ms cubic-bezier(.4,0,.2,1);
+  --r-sm:4px;--r-md:6px;--r-lg:10px;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);background:var(--bg-0);color:var(--text-1);font-size:12px;line-height:1.45;-webkit-font-smoothing:antialiased}
+input,select,button,textarea{font-family:inherit;font-size:inherit}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border-l);border-radius:3px}
+
+/* ================================================================
+   APP SHELL
+   ================================================================ */
+.app{height:100vh;display:flex;flex-direction:column}
+
+/* ── TOPBAR ── */
+.topbar{
+  height:44px;min-height:44px;background:var(--bg-2);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 10px;gap:4px;z-index:100;
+}
+.logo{
+  font-weight:700;font-size:14px;letter-spacing:-.3px;
+  display:flex;align-items:center;gap:6px;
+  padding-right:12px;margin-right:6px;
+  border-right:1px solid var(--border);color:var(--text-1);
+}
+.logo svg{width:20px;height:20px}
+.tb-divider{width:1px;height:22px;background:var(--border);margin:0 4px}
+.tb-group{display:flex;align-items:center;gap:2px}
+.flex-1{flex:1}
+
+/* ── BUTTONS ── */
+.btn{
+  height:26px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--bg-3);color:var(--text-2);cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;gap:4px;
+  font-weight:500;font-size:11px;white-space:nowrap;transition:all var(--ease);
+}
+.btn:hover{background:var(--bg-5);color:var(--text-1);border-color:var(--border-l)}
+.btn.active{background:var(--accent-s);color:var(--accent);border-color:var(--accent)}
+.btn-icon{width:28px;padding:0}
+.btn-ghost{border-color:transparent;background:transparent}
+.btn-ghost:hover{background:var(--bg-4);border-color:transparent}
+.btn-accent{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-accent:hover{background:var(--accent-h)}
+.btn-sm{height:24px;padding:0 7px;font-size:11px}
+.btn-xs{height:20px;padding:0 5px;font-size:10px}
+.btn-danger{color:var(--red)}
+.btn-danger:hover{background:var(--red-s);border-color:var(--red)}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;overflow:hidden}
+
+/* ================================================================
+   LEFT PANEL — LAYERS
+   ================================================================ */
+.panel-l{
+  width:232px;min-width:232px;background:var(--bg-2);
+  border-right:1px solid var(--border);display:flex;flex-direction:column;
+}
+.p-head{
+  height:34px;min-height:34px;display:flex;align-items:center;
+  justify-content:space-between;padding:0 10px;
+  font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.6px;color:var(--text-3);
+  border-bottom:1px solid var(--border);
+}
+.p-body{flex:1;overflow-y:auto;padding:4px}
+
+.layer{
+  display:flex;align-items:center;gap:6px;height:30px;
+  padding:0 8px;border-radius:var(--r-sm);cursor:pointer;
+  transition:background var(--ease);position:relative;
+}
+.layer:hover{background:var(--bg-4)}
+.layer.sel{background:var(--accent-s)}
+.layer-icon{
+  width:16px;height:16px;border-radius:3px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--bg-5);flex-shrink:0;
+}
+.layer-icon svg{width:10px;height:10px;color:var(--text-3)}
+.layer.sel .layer-icon svg{color:var(--accent)}
+.layer-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.layer-vis{opacity:0;transition:opacity var(--ease);color:var(--text-3);cursor:pointer;background:none;border:none}
+.layer:hover .layer-vis{opacity:1}
+.layer-vis svg{width:12px;height:12px}
+.layer-indicator{
+  position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  width:5px;height:5px;border-radius:50%;
+}
+.layer-indicator.animated{background:var(--accent)}
+
+/* ================================================================
+   CENTER — CANVAS + TIMELINE
+   ================================================================ */
+.center{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── CANVAS TOOLBAR ── */
+.c-toolbar{
+  height:38px;min-height:38px;background:var(--bg-2);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 6px;gap:2px;
+}
+
+/* ── CANVAS VIEWPORT ── */
+.c-viewport{
+  flex:1;position:relative;overflow:hidden;
+  background:
+    radial-gradient(ellipse at 50% 45%,rgba(67,83,255,.04) 0%,transparent 65%),
+    var(--bg-1);
+}
+.c-viewport svg{position:absolute;inset:0;width:100%;height:100%}
+.artboard{fill:#fff;filter:drop-shadow(0 2px 20px rgba(0,0,0,.35))}
+.grid-line{stroke:#e2e2ea;stroke-width:.4;opacity:.12}
+.grid-line-major{stroke:#d0d0db;stroke-width:.6;opacity:.18}
+
+/* selection */
+.sel-box{fill:none;stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3}
+.sel-handle{fill:#fff;stroke:var(--accent);stroke-width:1.5}
+
+/* sample shapes */
+.shape-rect{cursor:move}
+.shape-circle{cursor:move}
+.shape-text{cursor:move}
+
+/* canvas info */
+.c-info{
+  position:absolute;bottom:10px;left:10px;
+  display:flex;gap:10px;font-size:10px;color:var(--text-3);
+  font-family:var(--mono);background:var(--bg-2);
+  border:1px solid var(--border);border-radius:var(--r-md);
+  padding:3px 9px;
+}
+.c-zoom{
+  position:absolute;bottom:10px;right:10px;
+  display:flex;gap:1px;background:var(--bg-2);
+  border:1px solid var(--border);border-radius:var(--r-md);
+  padding:2px;
+}
+
+/* ================================================================
+   TIMELINE
+   ================================================================ */
+.timeline{
+  height:180px;min-height:120px;background:var(--bg-2);
+  border-top:1px solid var(--border);display:flex;flex-direction:column;
+}
+.tl-head{
+  height:34px;min-height:34px;display:flex;align-items:center;
+  padding:0 10px;gap:6px;border-bottom:1px solid var(--border);
+}
+.tl-body{flex:1;display:flex;overflow:hidden}
+.tl-labels{width:160px;min-width:160px;border-right:1px solid var(--border);overflow-y:auto}
+.tl-label{
+  height:28px;display:flex;align-items:center;padding:0 10px;gap:6px;
+  border-bottom:1px solid var(--border);font-size:11px;cursor:pointer;
+  transition:background var(--ease);
+}
+.tl-label:hover{background:var(--bg-4)}
+.tl-label.sel{background:var(--accent-s)}
+.tl-label-icon{width:12px;height:12px;opacity:.4}
+.tl-tracks{flex:1;overflow:auto;position:relative}
+.tl-ruler{height:22px;background:var(--bg-3);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5}
+.tl-track{height:28px;border-bottom:1px solid var(--border);position:relative}
+.tl-track.sel{background:var(--accent-s)}
+.kf{
+  position:absolute;top:50%;transform:translate(-50%,-50%) rotate(45deg);
+  width:9px;height:9px;background:var(--accent);border:1.5px solid #fff;
+  cursor:pointer;z-index:2;transition:all var(--ease);
+}
+.kf:hover{transform:translate(-50%,-50%) rotate(45deg) scale(1.25)}
+.kf.sel{background:var(--yellow);box-shadow:0 0 6px rgba(251,191,36,.5)}
+.playhead{position:absolute;top:0;bottom:0;width:1px;background:var(--red);z-index:10;pointer-events:none}
+.playhead::before{
+  content:'';position:absolute;top:-1px;left:-5px;
+  width:11px;height:10px;background:var(--red);
+  clip-path:polygon(0 0,100% 0,50% 100%);
+}
+.tl-time{font-family:var(--mono);font-size:11px;color:var(--text-2);min-width:64px}
+
+/* ================================================================
+   RIGHT PANEL — DESIGN / ANIMATE
+   ================================================================ */
+.panel-r{
+  width:256px;min-width:256px;background:var(--bg-2);
+  border-left:1px solid var(--border);display:flex;flex-direction:column;
+  overflow:hidden;
+}
+
+/* tab toggle */
+.mode-toggle{
+  display:flex;height:36px;min-height:36px;align-items:center;
+  justify-content:center;padding:0 10px;
+  border-bottom:1px solid var(--border);
+}
+.mode-tabs{
+  display:flex;background:var(--bg-3);border-radius:var(--r-md);
+  border:1px solid var(--border);overflow:hidden;width:100%;
+}
+.mode-tab{
+  flex:1;height:26px;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:600;color:var(--text-3);
+  cursor:pointer;transition:all var(--ease);border:none;background:none;
+  border-radius:var(--r-sm);margin:2px;
+}
+.mode-tab:hover{color:var(--text-2)}
+.mode-tab.active{background:var(--bg-5);color:var(--text-1);box-shadow:0 1px 3px rgba(0,0,0,.2)}
+
+/* panel scroll */
+.panel-scroll{flex:1;overflow-y:auto;padding-bottom:32px}
+
+/* ── INSPECTOR SECTIONS ── */
+.insp-section{
+  padding:10px 12px;border-bottom:1px solid var(--border);
+}
+.insp-title{
+  font-size:11px;font-weight:600;color:var(--text-2);
+  margin-bottom:8px;display:flex;align-items:center;gap:6px;
+}
+.insp-title-check{
+  display:flex;align-items:center;gap:6px;
+  font-size:11px;font-weight:600;color:var(--text-2);
+  margin-bottom:0;cursor:pointer;
+}
+.insp-title-check input[type="checkbox"]{
+  width:14px;height:14px;accent-color:var(--accent);cursor:pointer;
+  border-radius:3px;
+}
+.insp-title-check.collapsed{color:var(--text-3)}
+
+/* rows */
+.insp-row{
+  display:flex;align-items:center;gap:6px;
+  margin-bottom:6px;min-height:26px;
+}
+.insp-row:last-child{margin-bottom:0}
+.insp-label{
+  width:72px;min-width:72px;font-size:11px;color:var(--text-3);
+  font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.insp-label.bold{font-weight:600;color:var(--text-2)}
+
+/* inputs */
+.insp-input{
+  flex:1;height:26px;background:var(--bg-3);border:1px solid var(--border);
+  border-radius:var(--r-sm);color:var(--text-1);padding:0 7px;
+  font-family:var(--mono);font-size:11px;outline:none;
+  transition:border-color var(--ease);min-width:0;
+}
+.insp-input:focus{border-color:var(--accent)}
+.insp-input::placeholder{color:var(--text-4)}
+.insp-input.w-sm{width:62px;min-width:62px;flex:none}
+.insp-input.w-md{width:76px;min-width:76px;flex:none}
+.insp-input:disabled{opacity:.4;cursor:not-allowed}
+
+/* color input */
+.color-field{
+  display:flex;align-items:center;gap:0;flex:1;
+  background:var(--bg-3);border:1px solid var(--border);
+  border-radius:var(--r-sm);height:26px;overflow:hidden;
+  transition:border-color var(--ease);
+}
+.color-field:focus-within{border-color:var(--accent)}
+.color-swatch{
+  width:26px;height:26px;min-width:26px;border:none;cursor:pointer;
+  border-right:1px solid var(--border);padding:4px;
+  display:flex;align-items:center;justify-content:center;background:transparent;
+}
+.color-swatch-inner{
+  width:16px;height:16px;border-radius:3px;
+  border:1px solid rgba(255,255,255,.08);
+}
+.color-hex{
+  flex:1;height:100%;background:none;border:none;color:var(--text-1);
+  padding:0 7px;font-family:var(--mono);font-size:11px;outline:none;
+  min-width:0;
+}
+.color-hex::placeholder{color:var(--text-4)}
+
+/* select */
+.insp-select{
+  flex:1;height:26px;background:var(--bg-3);border:1px solid var(--border);
+  border-radius:var(--r-sm);color:var(--text-1);padding:0 6px;
+  font-size:11px;outline:none;cursor:pointer;
+  appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236a6a7e' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 6px center;
+  padding-right:20px;
+}
+
+/* toggle group */
+.toggle-group{
+  display:flex;background:var(--bg-3);border:1px solid var(--border);
+  border-radius:var(--r-sm);overflow:hidden;flex:1;
+}
+.toggle-btn{
+  flex:1;height:24px;display:flex;align-items:center;justify-content:center;
+  border:none;background:none;color:var(--text-3);cursor:pointer;
+  transition:all var(--ease);padding:0;
+}
+.toggle-btn:hover{color:var(--text-2);background:var(--bg-4)}
+.toggle-btn.active{color:var(--text-1);background:var(--bg-5)}
+.toggle-btn svg{width:14px;height:14px}
+.toggle-btn+.toggle-btn{border-left:1px solid var(--border)}
+
+/* alignment buttons */
+.align-row{
+  display:flex;gap:2px;padding:2px 0;
+}
+.align-btn{
+  flex:1;height:28px;display:flex;align-items:center;justify-content:center;
+  border:1px solid transparent;border-radius:var(--r-sm);
+  background:var(--bg-3);color:var(--text-3);cursor:pointer;
+  transition:all var(--ease);
+}
+.align-btn:hover{color:var(--text-1);background:var(--bg-5);border-color:var(--border)}
+.align-btn svg{width:16px;height:16px}
+
+/* slider */
+.insp-slider{
+  flex:1;-webkit-appearance:none;appearance:none;
+  height:3px;background:var(--bg-5);border-radius:2px;outline:none;
+}
+.insp-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;width:12px;height:12px;
+  background:var(--accent);border-radius:50%;cursor:pointer;
+  border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3);
+}
+
+/* ── ANIMATE PANEL SPECIFICS ── */
+.preset-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:4px;
+}
+.preset-btn{
+  height:30px;display:flex;align-items:center;justify-content:center;
+  gap:4px;font-size:10px;font-weight:500;color:var(--text-2);
+  background:var(--bg-3);border:1px solid var(--border);
+  border-radius:var(--r-sm);cursor:pointer;transition:all var(--ease);
+}
+.preset-btn:hover{background:var(--bg-5);color:var(--text-1);border-color:var(--border-l)}
+.preset-btn svg{width:12px;height:12px;opacity:.6}
+
+.kf-list-item{
+  display:flex;align-items:center;gap:8px;height:28px;
+  padding:0 8px;border-radius:var(--r-sm);cursor:pointer;
+  transition:background var(--ease);font-size:11px;
+}
+.kf-list-item:hover{background:var(--bg-4)}
+.kf-list-item.sel{background:var(--accent-s);color:var(--accent)}
+.kf-diamond{
+  width:8px;height:8px;background:var(--accent);transform:rotate(45deg);
+  border-radius:1px;flex-shrink:0;
+}
+.kf-list-item.sel .kf-diamond{background:var(--yellow)}
+.kf-frame{font-family:var(--mono);font-size:10px;color:var(--text-3)}
+.kf-list-item.sel .kf-frame{color:var(--accent)}
+.kf-ease{flex:1;text-align:right;font-size:10px;color:var(--text-4)}
+
+/* easing curve */
+.easing-preview{
+  width:100%;height:80px;background:var(--bg-3);border:1px solid var(--border);
+  border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;
+  margin-bottom:8px;
+}
+.easing-preview svg{width:90%;height:70%}
+
+/* scene stats */
+.stat-row{
+  display:flex;justify-content:space-between;font-size:11px;
+  padding:3px 0;color:var(--text-3);
+}
+.stat-val{color:var(--text-2);font-family:var(--mono);font-size:11px}
+
+/* checkbox row */
+.check-row{
+  display:flex;align-items:center;gap:8px;
+  font-size:11px;color:var(--text-2);cursor:pointer;
+  height:26px;
+}
+.check-row input[type="checkbox"]{
+  width:14px;height:14px;accent-color:var(--accent);cursor:pointer;
+}
+
+/* ================================================================
+   HIDDEN STATES (JS toggles would control these)
+   ================================================================ */
+.panel-animate{display:none}
+.panel-r.animate-mode .panel-design{display:none}
+.panel-r.animate-mode .panel-animate{display:block}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ═══════════════════════════════════════════════
+     TOPBAR
+     ═══════════════════════════════════════════════ -->
+<div class="topbar">
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="4" fill="var(--accent)" opacity=".9"/><path d="M8 12C8 9 10 7 12 7C14 7 15 8.5 15 10C15 12 12 12 12 14" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17" r="1" fill="#fff"/></svg>
+    Loopa
+  </div>
+  <div class="tb-group">
+    <button class="btn btn-ghost btn-sm">File</button>
+    <button class="btn btn-ghost btn-sm">Import</button>
+    <button class="btn btn-ghost btn-sm">Export</button>
+  </div>
+  <div class="tb-divider"></div>
+  <div class="tb-group">
+    <button class="btn btn-ghost btn-icon btn-sm" title="Undo">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 015 5v0a5 5 0 01-5 5H8"/><path d="M7 14l-4-4 4-4"/></svg>
+    </button>
+    <button class="btn btn-ghost btn-icon btn-sm" title="Redo">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 00-5 5v0a5 5 0 005 5h5"/><path d="M17 14l4-4-4-4"/></svg>
+    </button>
+  </div>
+  <div class="tb-divider"></div>
+  <span style="font-size:12px;color:var(--text-2);font-weight:500">Hero Animation</span>
+  <div class="flex-1"></div>
+  <span style="font-size:10px;color:var(--text-3);font-family:var(--mono)">800 × 600</span>
+  <div class="tb-divider"></div>
+  <button class="btn btn-accent btn-sm">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Export
+  </button>
+</div>
+
+<div class="main">
+<!-- ═══════════════════════════════════════════════
+     LEFT PANEL — LAYERS
+     ═══════════════════════════════════════════════ -->
+<div class="panel-l">
+  <div class="p-head">
+    <span>Layers</span>
+    <div style="display:flex;gap:2px">
+      <button class="btn btn-ghost btn-icon btn-xs" title="Add Rectangle"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></button>
+      <button class="btn btn-ghost btn-icon btn-xs" title="Add Circle"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg></button>
+      <button class="btn btn-ghost btn-icon btn-xs" title="Add Text"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></button>
+      <button class="btn btn-ghost btn-icon btn-xs" title="Add Path"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7-3-3-7 7v3h3z"/><path d="M18 4l2 2"/></svg></button>
+    </div>
+  </div>
+  <div class="p-body">
+    <div class="layer">
+      <div class="layer-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 7V5h14v2M9 19h6M12 5v14"/></svg></div>
+      <span class="layer-name">Heading Text</span>
+      <button class="layer-vis"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <div class="layer-indicator animated"></div>
+    </div>
+    <div class="layer sel">
+      <div class="layer-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg></div>
+      <span class="layer-name">Card Background</span>
+      <button class="layer-vis"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <div class="layer-indicator animated"></div>
+    </div>
+    <div class="layer">
+      <div class="layer-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg></div>
+      <span class="layer-name">Accent Circle</span>
+      <button class="layer-vis"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <div class="layer-indicator animated"></div>
+    </div>
+    <div class="layer">
+      <div class="layer-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7-3-3-7 7v3h3z"/></svg></div>
+      <span class="layer-name">Wave Path</span>
+      <button class="layer-vis"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    </div>
+    <div class="layer">
+      <div class="layer-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,2 22,20 2,20"/></svg></div>
+      <span class="layer-name">Triangle Deco</span>
+      <button class="layer-vis"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    </div>
+    <div class="layer" style="opacity:.45">
+      <div class="layer-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg></div>
+      <span class="layer-name">Background Fill</span>
+      <button class="layer-vis"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     CENTER — CANVAS + TIMELINE
+     ═══════════════════════════════════════════════ -->
+<div class="center">
+  <!-- Canvas Toolbar -->
+  <div class="c-toolbar">
+    <button class="btn btn-ghost btn-icon active" title="Select (V)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4l7 19 3-8 8-3z"/></svg></button>
+    <button class="btn btn-ghost btn-icon" title="Rectangle (R)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></button>
+    <button class="btn btn-ghost btn-icon" title="Circle (C)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg></button>
+    <button class="btn btn-ghost btn-icon" title="Pen (P)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7-3-3-7 7v3h3z"/><path d="M18 4l2 2"/></svg></button>
+    <button class="btn btn-ghost btn-icon" title="Text (T)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></button>
+    <div class="tb-divider"></div>
+    <button class="btn btn-ghost btn-icon" title="Hand (H)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 00-4 0v5M14 10V4a2 2 0 00-4 0v7M10 9.5V6a2 2 0 00-4 0v8l-1.8-1.8c-.7-.7-2-.5-2.2.6-.1.5.1 1 .5 1.4L8 20c1.5 1.5 3.5 2 5.5 2H15a5 5 0 005-5v-6a2 2 0 00-4 0v1"/></svg></button>
+    <div class="flex-1"></div>
+    <span style="font-size:10px;color:var(--text-4);font-family:var(--mono)">Select</span>
+  </div>
+
+  <!-- Canvas -->
+  <div class="c-viewport">
+    <svg viewBox="-120 -80 1040 760" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="g10" width="10" height="10" patternUnits="userSpaceOnUse">
+          <path d="M 10 0 L 0 0 0 10" fill="none" class="grid-line"/>
+        </pattern>
+        <pattern id="g100" width="100" height="100" patternUnits="userSpaceOnUse">
+          <rect width="100" height="100" fill="url(#g10)"/>
+          <path d="M 100 0 L 0 0 0 100" fill="none" class="grid-line-major"/>
+        </pattern>
+        <filter id="shadow1" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000" flood-opacity=".12"/>
+        </filter>
+      </defs>
+
+      <!-- Artboard -->
+      <rect class="artboard" x="0" y="0" width="800" height="600" rx="2"/>
+      <rect x="0" y="0" width="800" height="600" fill="url(#g100)"/>
+
+      <!-- Sample shapes -->
+      <!-- Background rect -->
+      <rect x="40" y="40" width="720" height="520" rx="16" fill="#f0f2f5" opacity=".6"/>
+
+      <!-- Card -->
+      <rect class="shape-rect" x="220" y="140" width="360" height="280" rx="12" fill="#ffffff" filter="url(#shadow1)" stroke="#e2e5ea" stroke-width="1"/>
+
+      <!-- Selected element highlight -->
+      <rect x="218" y="138" width="364" height="284" rx="13" fill="none" stroke="var(--accent)" stroke-width="1" stroke-dasharray="5 4"/>
+      <!-- Handles -->
+      <rect x="214" y="134" width="8" height="8" rx="1.5" fill="#fff" stroke="var(--accent)" stroke-width="1.5"/>
+      <rect x="578" y="134" width="8" height="8" rx="1.5" fill="#fff" stroke="var(--accent)" stroke-width="1.5"/>
+      <rect x="214" y="418" width="8" height="8" rx="1.5" fill="#fff" stroke="var(--accent)" stroke-width="1.5"/>
+      <rect x="578" y="418" width="8" height="8" rx="1.5" fill="#fff" stroke="var(--accent)" stroke-width="1.5"/>
+
+      <!-- Accent circle -->
+      <circle cx="400" cy="220" r="32" fill="#4353ff" opacity=".15"/>
+      <circle cx="400" cy="220" r="14" fill="#4353ff"/>
+
+      <!-- Text -->
+      <text x="400" y="290" text-anchor="middle" font-family="DM Sans" font-size="22" font-weight="700" fill="#1a1a2e">Card Title</text>
+      <text x="400" y="316" text-anchor="middle" font-family="DM Sans" font-size="13" fill="#6a6a7e">Subtitle text goes here</text>
+
+      <!-- Button shape -->
+      <rect x="330" y="345" width="140" height="38" rx="8" fill="#4353ff"/>
+      <text x="400" y="369" text-anchor="middle" font-family="DM Sans" font-size="12" font-weight="600" fill="#fff">Get Started</text>
+
+      <!-- Decorative triangle -->
+      <polygon points="680,80 720,140 640,140" fill="#fbbf24" opacity=".25"/>
+
+      <!-- Wave path -->
+      <path d="M60,500 Q200,440 400,480 T740,460" fill="none" stroke="#4353ff" stroke-width="2" opacity=".2" stroke-linecap="round"/>
+    </svg>
+
+    <div class="c-info">
+      <span>85%</span>
+      <span>402, 280</span>
+    </div>
+    <div class="c-zoom">
+      <button class="btn btn-ghost btn-icon btn-xs"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+      <button class="btn btn-ghost btn-xs" style="font-family:var(--mono);font-size:10px;min-width:40px">85%</button>
+      <button class="btn btn-ghost btn-icon btn-xs"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+    </div>
+  </div>
+
+  <!-- ═══════ TIMELINE ═══════ -->
+  <div class="timeline">
+    <div class="tl-head">
+      <button class="btn btn-icon btn-sm" title="Play"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg></button>
+      <button class="btn btn-icon btn-sm" title="Stop"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="1"/></svg></button>
+      <div class="tb-divider"></div>
+      <span class="tl-time">0:01.0 / 0:02.5</span>
+      <div class="tb-divider"></div>
+      <span style="font-size:10px;color:var(--text-3)">Frame</span>
+      <input class="insp-input w-sm" type="text" value="24" style="height:22px;width:38px;min-width:38px;text-align:center"/>
+      <span style="font-size:10px;color:var(--text-3)">FPS</span>
+      <input class="insp-input w-sm" type="text" value="24" style="height:22px;width:32px;min-width:32px;text-align:center"/>
+      <div class="flex-1"></div>
+      <button class="btn btn-accent btn-sm" style="gap:3px">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        Keyframe
+      </button>
+    </div>
+    <div class="tl-body">
+      <div class="tl-labels">
+        <div class="tl-label"><svg class="tl-label-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg><span style="font-size:10px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Heading Text</span></div>
+        <div class="tl-label sel"><svg class="tl-label-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span style="font-size:10px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Card Background</span></div>
+        <div class="tl-label"><svg class="tl-label-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg><span style="font-size:10px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Accent Circle</span></div>
+        <div class="tl-label"><svg class="tl-label-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7-3-3-7 7v3h3z"/></svg><span style="font-size:10px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Wave Path</span></div>
+        <div class="tl-label"><svg class="tl-label-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,2 22,20 2,20"/></svg><span style="font-size:10px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Triangle Deco</span></div>
+      </div>
+      <div class="tl-tracks">
+        <!-- Ruler -->
+        <svg class="tl-ruler" width="800" height="22">
+          <line x1="0" y1="21" x2="800" y2="21" stroke="var(--border)" stroke-width="1"/>
+          <g fill="var(--text-4)" font-size="8" font-family="var(--mono)" text-anchor="middle">
+            <text x="20" y="12">0</text><line x1="20" y1="15" x2="20" y2="22" stroke="var(--border-l)"/>
+            <text x="60" y="12">5</text><line x1="60" y1="15" x2="60" y2="22" stroke="var(--border-l)"/>
+            <text x="100" y="12">10</text><line x1="100" y1="15" x2="100" y2="22" stroke="var(--border-l)"/>
+            <text x="140" y="12">15</text><line x1="140" y1="15" x2="140" y2="22" stroke="var(--border-l)"/>
+            <text x="180" y="12">20</text><line x1="180" y1="15" x2="180" y2="22" stroke="var(--border-l)"/>
+            <text x="220" y="12">25</text><line x1="220" y1="15" x2="220" y2="22" stroke="var(--border-l)"/>
+            <text x="260" y="12">30</text><line x1="260" y1="15" x2="260" y2="22" stroke="var(--border-l)"/>
+            <text x="300" y="12">35</text><line x1="300" y1="15" x2="300" y2="22" stroke="var(--border-l)"/>
+            <text x="340" y="12">40</text><line x1="340" y1="15" x2="340" y2="22" stroke="var(--border-l)"/>
+            <text x="380" y="12">45</text><line x1="380" y1="15" x2="380" y2="22" stroke="var(--border-l)"/>
+            <text x="420" y="12">50</text><line x1="420" y1="15" x2="420" y2="22" stroke="var(--border-l)"/>
+            <text x="460" y="12">55</text><line x1="460" y1="15" x2="460" y2="22" stroke="var(--border-l)"/>
+            <text x="500" y="12">60</text><line x1="500" y1="15" x2="500" y2="22" stroke="var(--border-l)"/>
+          </g>
+          <!-- tick marks -->
+          <g stroke="var(--border)" stroke-width=".5">
+            <line x1="28" y1="18" x2="28" y2="22"/><line x1="36" y1="18" x2="36" y2="22"/><line x1="44" y1="18" x2="44" y2="22"/><line x1="52" y1="18" x2="52" y2="22"/>
+            <line x1="68" y1="18" x2="68" y2="22"/><line x1="76" y1="18" x2="76" y2="22"/><line x1="84" y1="18" x2="84" y2="22"/><line x1="92" y1="18" x2="92" y2="22"/>
+          </g>
+        </svg>
+        <div style="position:relative;width:800px">
+          <!-- Track rows -->
+          <div class="tl-track">
+            <div class="kf" style="left:20px"></div>
+            <div class="kf" style="left:180px"></div>
+            <div class="kf" style="left:420px"></div>
+          </div>
+          <div class="tl-track sel">
+            <div class="kf" style="left:20px"></div>
+            <div class="kf sel" style="left:120px"></div>
+            <div class="kf" style="left:300px"></div>
+            <div class="kf" style="left:460px"></div>
+          </div>
+          <div class="tl-track">
+            <div class="kf" style="left:60px"></div>
+            <div class="kf" style="left:260px"></div>
+          </div>
+          <div class="tl-track">
+            <div class="kf" style="left:20px"></div>
+            <div class="kf" style="left:500px"></div>
+          </div>
+          <div class="tl-track"></div>
+          <!-- Playhead -->
+          <div class="playhead" style="left:212px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     RIGHT PANEL — DESIGN / ANIMATE
+     ═══════════════════════════════════════════════ -->
+<div class="panel-r" id="rightPanel">
+  <!-- Mode Toggle -->
+  <div class="mode-toggle">
+    <div class="mode-tabs">
+      <button class="mode-tab active" id="tabDesign" onclick="switchTab('design')">Design</button>
+      <button class="mode-tab" id="tabAnimate" onclick="switchTab('animate')">Animate</button>
+    </div>
+  </div>
+
+  <div class="panel-scroll">
+
+    <!-- ═══════════════════════════════════════
+         DESIGN TAB
+         ═══════════════════════════════════════ -->
+    <div class="panel-design" id="panelDesign">
+
+      <!-- Alignment -->
+      <div class="insp-section">
+        <div class="align-row">
+          <button class="align-btn" title="Align left"><svg viewBox="0 -960 960 960" fill="currentColor"><path d="M80-80v-800h80v800H80Zm160-200v-120h400v120H240Zm0-280v-120h640v120H240Z"/></svg></button>
+          <button class="align-btn" title="Align center H"><svg viewBox="0 -960 960 960" fill="currentColor"><path d="M440-80v-200H240v-120h200v-160H120v-120h320v-200h80v200h320v120H520v160h200v120H520v200h-80Z"/></svg></button>
+          <button class="align-btn" title="Align right"><svg viewBox="0 -960 960 960" fill="currentColor"><path d="M800-80v-800h80v800h-80ZM320-280v-120h400v120H320ZM80-560v-120h640v120H80Z"/></svg></button>
+          <button class="align-btn" title="Align top"><svg viewBox="0 -960 960 960" fill="currentColor"><path d="M280-80v-640h120v640H280Zm280-240v-400h120v400H560ZM80-800v-80h800v80H80Z"/></svg></button>
+          <button class="align-btn" title="Align center V"><svg viewBox="0 -960 960 960" fill="currentColor"><path d="M280-120v-320H80v-80h200v-320h120v320h160v-200h120v200h200v80H680v200H560v-200H400v320H280Z"/></svg></button>
+          <button class="align-btn" title="Align bottom"><svg viewBox="0 -960 960 960" fill="currentColor"><path d="M80-80v-80h800v80H80Zm200-160v-640h120v640H280Zm280 0v-400h120v400H560Z"/></svg></button>
+        </div>
+      </div>
+
+      <!-- Layout -->
+      <div class="insp-section">
+        <div class="insp-title">Layout</div>
+        <div class="insp-row">
+          <span class="insp-label">Position</span>
+          <input class="insp-input w-md" type="text" value="220" placeholder="X"/>
+          <input class="insp-input w-md" type="text" value="140" placeholder="Y"/>
+        </div>
+        <div class="insp-row">
+          <span class="insp-label">Size</span>
+          <input class="insp-input w-md" type="text" value="360" placeholder="W"/>
+          <input class="insp-input w-md" type="text" value="280" placeholder="H"/>
+        </div>
+        <div class="insp-row">
+          <span class="insp-label">Angle</span>
+          <input class="insp-input w-md" type="text" value="0" placeholder="0"/>
+        </div>
+        <div class="insp-row">
+          <span class="insp-label">Corner radius</span>
+          <input class="insp-input w-md" type="text" value="12" placeholder="0"/>
+        </div>
+      </div>
+
+      <!-- Clip Content -->
+      <div class="insp-section" style="padding:8px 12px">
+        <label class="insp-title-check collapsed">
+          <input type="checkbox"/>
+          Clip content
+        </label>
+      </div>
+
+      <!-- Opacity & Blend -->
+      <div class="insp-section">
+        <div class="insp-row">
+          <span class="insp-label bold">Opacity</span>
+          <input class="insp-input" type="text" value="100" style="width:56px;min-width:56px;flex:none"/>
+          <button class="btn btn-ghost btn-xs" style="min-width:28px" title="Blend mode">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l5.5 5.5c3 3 3 8 0 11s-8 3-11 0-3-8 0-11L12 2z"/><path d="M12 2L6.5 7.5c-3 3-3 8 0 11"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Fill -->
+      <div class="insp-section">
+        <label class="insp-title-check">
+          <input type="checkbox" checked/>
+          Fill
+        </label>
+        <div class="insp-row" style="margin-top:8px">
+          <span class="insp-label">Color</span>
+          <div class="color-field">
+            <button class="color-swatch"><div class="color-swatch-inner" style="background:#FFFFFF"></div></button>
+            <input class="color-hex" type="text" value="FFFFFF" placeholder="HEX"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stroke -->
+      <div class="insp-section">
+        <label class="insp-title-check">
+          <input type="checkbox" checked/>
+          Stroke
+        </label>
+        <div class="insp-row" style="margin-top:8px">
+          <span class="insp-label">Weight</span>
+          <input class="insp-input" type="text" value="1"/>
+        </div>
+        <div class="insp-row">
+          <span class="insp-label">Color</span>
+          <div class="color-field">
+            <button class="color-swatch"><div class="color-swatch-inner" style="background:#E2E5EA"></div></button>
+            <input class="color-hex" type="text" value="E2E5EA" placeholder="HEX"/>
+          </div>
+        </div>
+        <div class="insp-row">
+          <span class="insp-label">Position</span>
+          <select class="insp-select">
+            <option>Centered</option>
+            <option>Inside</option>
+            <option>Outside</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Shadow -->
+      <div class="insp-section">
+        <label class="insp-title-check">
+          <input type="checkbox" checked/>
+          Shadow
+        </label>
+        <div class="insp-row" style="margin-top:8px">
+          <span class="insp-label">Offset</span>
+          <input class="insp-input w-md" type="text" value="0" placeholder="X"/>
+          <input class="insp-input w-md" type="text" value="8" placeholder="Y"/>
+        </div>
+        <div class="insp-row">
+          <span class="insp-label">Blur</span>
+          <input class="insp-input" type="text" value="16"/>
+        </div>
+        <div class="insp-row">
+          <span class="insp-label">Opacity</span>
+          <input class="insp-input" type="text" value="12"/>
+        </div>
+        <div class="insp-row">
+          <span class="insp-label">Color</span>
+          <div class="color-field">
+            <button class="color-swatch"><div class="color-swatch-inner" style="background:#000000"></div></button>
+            <input class="color-hex" type="text" value="000000" placeholder="HEX"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Blur -->
+      <div class="insp-section">
+        <label class="insp-title-check collapsed">
+          <input type="checkbox"/>
+          Blur
+        </label>
+      </div>
+
+    </div><!-- /panel-design -->
+
+    <!-- ═══════════════════════════════════════
+         ANIMATE TAB
+         ═══════════════════════════════════════ -->
+    <div class="panel-animate" id="panelAnimate">
+
+      <!-- Playback -->
+      <div class="insp-section">
+        <div class="insp-title">Playback</div>
+        <div class="insp-row">
+          <span class="insp-label">Duration</span>
+          <input class="insp-input" type="text" value="2.5"/>
+          <span style="font-size:10px;color:var(--text-4);min-width:16px">sec</span>
+        </div>
+        <div class="insp-row">
+          <span class="insp-label">Frame rate</span>
+          <input class="insp-input" type="text" value="24"/>
+          <span style="font-size:10px;color:var(--text-4);min-width:16px">fps</span>
+        </div>
+        <div class="insp-row">
+          <span class="insp-label">Direction</span>
+          <select class="insp-select">
+            <option>Normal</option>
+            <option>Reverse</option>
+            <option>Alternate</option>
+            <option>Alt-Reverse</option>
+          </select>
+        </div>
+        <div class="check-row" style="margin-top:2px">
+          <input type="checkbox" checked/> Loop animation
+        </div>
+      </div>
+
+      <!-- Animation Status -->
+      <div class="insp-section">
+        <div class="insp-title">
+          <span>Card Background</span>
+          <span style="font-size:10px;color:var(--accent);font-weight:400;margin-left:auto">4 keyframes</span>
+        </div>
+        <div class="stat-row"><span>Status</span><span class="stat-val" style="color:var(--accent)">● Animated</span></div>
+        <div class="stat-row"><span>Range</span><span class="stat-val">Frame 0 → 60</span></div>
+      </div>
+
+      <!-- Quick Animate -->
+      <div class="insp-section">
+        <div class="insp-title">Quick Animate</div>
+        <div class="preset-grid">
+          <button class="preset-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Fade In</button>
+          <button class="preset-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19V5"/></svg>Fade Out</button>
+          <button class="preset-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>Slide Right</button>
+          <button class="preset-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>Slide Up</button>
+          <button class="preset-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 5v2M12 17v2M5 12h2M17 12h2"/></svg>Scale In</button>
+          <button class="preset-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>Bounce</button>
+          <button class="preset-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12a8 8 0 1116 0 8 8 0 01-16 0"/><path d="M12 8v4l3 3"/></svg>Spin CW</button>
+          <button class="preset-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>Pulse</button>
+        </div>
+        <div class="insp-row" style="margin-top:8px">
+          <span class="insp-label">Duration</span>
+          <input class="insp-input" type="text" value="0.5"/>
+          <span style="font-size:10px;color:var(--text-4)">sec</span>
+        </div>
+        <div class="insp-row">
+          <span class="insp-label">Easing</span>
+          <select class="insp-select">
+            <option>Ease Out</option>
+            <option>Linear</option>
+            <option>Ease In</option>
+            <option>Ease In Out</option>
+            <option>Spring</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Current Frame Keyframe -->
+      <div class="insp-section">
+        <div class="insp-title">
+          <span>Keyframe @ Frame 24</span>
+        </div>
+
+        <!-- Easing Curve -->
+        <div class="easing-preview">
+          <svg viewBox="0 0 100 60" fill="none">
+            <path d="M0 60 C30 60 20 5 100 5" stroke="var(--accent)" stroke-width="2" fill="none"/>
+            <circle cx="0" cy="60" r="3" fill="var(--accent)"/>
+            <circle cx="100" cy="5" r="3" fill="var(--accent)"/>
+            <!-- handles -->
+            <line x1="0" y1="60" x2="30" y2="60" stroke="var(--text-3)" stroke-width="1" stroke-dasharray="2 2"/>
+            <circle cx="30" cy="60" r="2.5" fill="var(--accent)" stroke="#fff" stroke-width="1"/>
+            <line x1="100" y1="5" x2="20" y2="5" stroke="var(--text-3)" stroke-width="1" stroke-dasharray="2 2"/>
+            <circle cx="20" cy="5" r="2.5" fill="var(--accent)" stroke="#fff" stroke-width="1"/>
+          </svg>
+        </div>
+
+        <div class="insp-row">
+          <span class="insp-label">Easing</span>
+          <select class="insp-select">
+            <option>Ease Out</option>
+            <option>Linear</option>
+            <option>Ease In</option>
+            <option>Ease In Out</option>
+            <option>Ease Out Back</option>
+            <option>Ease Out Bounce</option>
+            <option>Spring</option>
+            <option>Steps(5)</option>
+            <option>Custom Bezier</option>
+          </select>
+        </div>
+
+        <!-- Recorded Properties -->
+        <div style="margin-top:10px">
+          <div class="insp-title" style="font-size:10px;margin-bottom:6px">Recorded properties</div>
+          <div class="insp-row" style="margin-bottom:4px">
+            <label class="check-row" style="height:22px;font-size:11px"><input type="checkbox" checked/> X</label>
+            <input class="insp-input w-sm" type="text" value="300" style="height:22px"/>
+          </div>
+          <div class="insp-row" style="margin-bottom:4px">
+            <label class="check-row" style="height:22px;font-size:11px"><input type="checkbox" checked/> Y</label>
+            <input class="insp-input w-sm" type="text" value="180" style="height:22px"/>
+          </div>
+          <div class="insp-row" style="margin-bottom:4px">
+            <label class="check-row" style="height:22px;font-size:11px"><input type="checkbox" checked/> Opacity</label>
+            <input class="insp-input w-sm" type="text" value="80" style="height:22px"/>
+          </div>
+          <div class="insp-row" style="margin-bottom:4px">
+            <label class="check-row" style="height:22px;font-size:11px;color:var(--text-4)"><input type="checkbox"/> Rotation</label>
+            <span style="font-size:10px;color:var(--text-4);font-style:italic">inherited</span>
+          </div>
+          <div class="insp-row" style="margin-bottom:4px">
+            <label class="check-row" style="height:22px;font-size:11px;color:var(--text-4)"><input type="checkbox"/> Scale</label>
+            <span style="font-size:10px;color:var(--text-4);font-style:italic">inherited</span>
+          </div>
+          <div class="insp-row" style="margin-bottom:4px">
+            <label class="check-row" style="height:22px;font-size:11px;color:var(--text-4)"><input type="checkbox"/> Fill</label>
+            <span style="font-size:10px;color:var(--text-4);font-style:italic">inherited</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Keyframe List -->
+      <div class="insp-section">
+        <div class="insp-title">Keyframes</div>
+        <div class="kf-list-item"><div class="kf-diamond"></div> Frame 0 <span class="kf-ease">ease-out</span></div>
+        <div class="kf-list-item sel"><div class="kf-diamond"></div> Frame 12 <span class="kf-ease">ease-out</span></div>
+        <div class="kf-list-item"><div class="kf-diamond"></div> Frame 36 <span class="kf-ease">spring</span></div>
+        <div class="kf-list-item"><div class="kf-diamond"></div> Frame 60 <span class="kf-ease">ease-in</span></div>
+      </div>
+
+      <!-- Onion Skin -->
+      <div class="insp-section">
+        <label class="insp-title-check collapsed">
+          <input type="checkbox"/>
+          Onion Skin
+        </label>
+      </div>
+
+    </div><!-- /panel-animate -->
+
+  </div><!-- /panel-scroll -->
+</div><!-- /panel-r -->
+
+</div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+function switchTab(tab) {
+  const panel = document.getElementById('rightPanel');
+  const tabD = document.getElementById('tabDesign');
+  const tabA = document.getElementById('tabAnimate');
+  const panD = document.getElementById('panelDesign');
+  const panA = document.getElementById('panelAnimate');
+
+  if (tab === 'design') {
+    tabD.classList.add('active');
+    tabA.classList.remove('active');
+    panD.style.display = 'block';
+    panA.style.display = 'none';
+  } else {
+    tabA.classList.add('active');
+    tabD.classList.remove('active');
+    panD.style.display = 'none';
+    panA.style.display = 'block';
+  }
+}
+</script>
+</body>
+</html>

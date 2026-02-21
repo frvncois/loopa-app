@@ -28,7 +28,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
   border-radius: var(--r-sm);
   color: var(--text-1);
   padding: 0 1.25rem 0 0.375rem;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   outline: none;
   cursor: pointer;
   appearance: none;
@@ -41,7 +41,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 .label {
   width: 4.5rem;
   min-width: 4.5rem;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   color: var(--text-3);
   font-weight: 500;
   white-space: nowrap;

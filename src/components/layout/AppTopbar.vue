@@ -9,17 +9,21 @@ import IconDownload from '@/components/icons/IconDownload.vue'
 
 const props = defineProps<{
   projectName?: string
+  activeFrameName?: string
   artboardWidth?: number
   artboardHeight?: number
   canUndo?: boolean
   canRedo?: boolean
   saveState?: 'idle' | 'saving' | 'saved'
+  hasFigmaSync?: boolean    // true when active frame has a Figma source
+  isSyncing?: boolean
 }>()
 
 const emit = defineEmits<{
   undo: []
   redo: []
   'update:projectName': [name: string]
+  sync: []
 }>()
 
 const uiStore = useUiStore()
@@ -93,8 +97,29 @@ function finishEditName() {
       </span>
     </span>
 
-    <!-- Artboard dims -->
+    <!-- Active frame info -->
+    <span v-if="activeFrameName" class="frame-name-badge">{{ activeFrameName }}</span>
     <span v-if="artboardWidth" class="dims">{{ artboardWidth }} × {{ artboardHeight }}</span>
+
+    <!-- Figma sync button (only for Figma-sourced frames) -->
+    <button
+      v-if="hasFigmaSync"
+      class="button is-ghost is-icon is-sm sync-btn"
+      :disabled="isSyncing"
+      title="Sync from Figma"
+      @click="emit('sync')"
+    >
+      <svg
+        width="12" height="12" viewBox="0 0 16 16" fill="none"
+        :class="{ 'is-spinning': isSyncing }"
+      >
+        <path
+          d="M13.65 2.35A8 8 0 1 0 15 8h-2a6 6 0 1 1-1.06-3.41L10 6h5V1l-1.35 1.35z"
+          fill="currentColor"
+        />
+      </svg>
+    </button>
+
     <div class="divider" />
 
     <!-- Export accent button -->
@@ -135,6 +160,14 @@ function finishEditName() {
 .divider { width: 1px; height: 1.375rem; background: var(--border); margin: 0 0.25rem; }
 .group { display: flex; align-items: center; gap: 0.125rem; }
 .spacer { flex: 1; }
+.frame-name-badge {
+  font-size: 0.625rem;
+  color: var(--text-3);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 0.125rem 0.375rem;
+}
 .dims { font-size: 0.625rem; color: var(--text-3); font-family: var(--mono); }
 .save-indicator {
   display: flex;
@@ -176,6 +209,10 @@ function finishEditName() {
   border-radius: var(--r-sm);
   &:hover { background: var(--bg-4); }
 }
+.sync-btn svg { transition: transform 0.3s; }
+.sync-btn svg.is-spinning { animation: topbar-spin 0.8s linear infinite; }
+@keyframes topbar-spin { to { transform: rotate(360deg); } }
+
 .name-field {
   font-size: 0.75rem;
   color: var(--text-1);
@@ -202,7 +239,7 @@ function finishEditName() {
   justify-content: center;
   gap: 0.25rem;
   font-weight: 500;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   white-space: nowrap;
   transition: all var(--ease);
   &:hover:not(:disabled) { background: var(--bg-5); color: var(--text-1); border-color: var(--border-l); }
@@ -222,7 +259,7 @@ function finishEditName() {
   &.is-sm {
     height: 1.5rem;
     padding: 0 0.4375rem;
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     &.is-icon { width: 1.625rem; }
   }
 }

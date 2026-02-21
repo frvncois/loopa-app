@@ -156,14 +156,24 @@ function buildKs(el: Element, kfs: Keyframe[], totalFrames: number): object {
   const hasScaleAnim = kfs.some(k => k.props.scaleX !== undefined || k.props.scaleY !== undefined)
   const hasOpacityAnim = kfs.some(k => k.props.opacity !== undefined)
 
+  // Anchor point: transform origin in local pixel coords
+  const originX = (el as any).transformOrigin?.x ?? 0.5
+  const originY = (el as any).transformOrigin?.y ?? 0.5
+  const anchorX = originX * el.width
+  const anchorY = originY * el.height
+
+  // In Lottie, 'p' (position) is where the anchor sits in composition space
+  const posX = el.x + anchorX
+  const posY = el.y + anchorY
+
   const pos = hasPosAnim
     ? animatedVal(kfs, totalFrames,
         (p, e) => {
           const x = p.x ?? e.x
           const y = p.y ?? e.y
-          return [x, y, 0]
+          return [x + anchorX, y + anchorY, 0]
         }, el)
-    : staticVal([el.x, el.y, 0])
+    : staticVal([posX, posY, 0])
 
   const rotation = hasRotAnim
     ? animatedVal(kfs, totalFrames, (p, e) => p.rotation ?? e.rotation, el)
@@ -186,7 +196,7 @@ function buildKs(el: Element, kfs: Keyframe[], totalFrames: number): object {
     o: opacity,
     r: rotation,
     p: pos,
-    a: staticVal([0, 0, 0]),
+    a: staticVal([anchorX, anchorY, 0]),
     s: scale,
   }
 }
@@ -412,6 +422,11 @@ export const LottieExporter: BaseExporter = {
         warnings.push(`Text element "${el.name}" was skipped (not supported in Lottie V1 export).`)
         return
       }
+      if (el.type === 'video') {
+        warnings.push(`Video element "${el.name}" was skipped (video layers are not supported in Lottie format).`)
+        return
+      }
+      if (el.type === 'group') return  // groups are organizational; children export as individual layers
       const layer = buildLayer(el, i + 1, keyframes, totalFrames)
       if (layer) layers.push(layer)
     })

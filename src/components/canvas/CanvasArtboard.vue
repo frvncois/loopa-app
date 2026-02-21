@@ -2,6 +2,7 @@
 defineProps<{
   width: number
   height: number
+  backgroundColor?: string
 }>()
 </script>
 
@@ -12,13 +13,13 @@ defineProps<{
     y="0"
     :width="width"
     :height="height"
+    :fill="backgroundColor ? `#${backgroundColor}` : '#ffffff'"
     rx="2"
   />
 </template>
 
 <style scoped>
 .artboard {
-  fill: #fff;
   filter: drop-shadow(0 2px 20px rgba(0,0,0,.35));
 }
 </style>

@@ -10,10 +10,11 @@ import FillSection from './FillSection.vue'
 import StrokeSection from './StrokeSection.vue'
 import ShadowSection from './ShadowSection.vue'
 import BlurSection from './BlurSection.vue'
-import ClipContentSection from './ClipContentSection.vue'
+import MaskSection from './MaskSection.vue'
+import CropSection from './CropSection.vue'
 import TextSection from './TextSection.vue'
 import PathSection from './PathSection.vue'
-import ArtboardSection from './ArtboardSection.vue'
+import FrameSettingsSection from './FrameSettingsSection.vue'
 import GridSnapSection from './GridSnapSection.vue'
 import MultiSelectInfo from './MultiSelectInfo.vue'
 import PlaybackSection from './PlaybackSection.vue'
@@ -23,7 +24,8 @@ import KeyframeDetailSection from './KeyframeDetailSection.vue'
 import KeyframeListSection from './KeyframeListSection.vue'
 import ElementTimingSection from './ElementTimingSection.vue'
 import StaggerSection from './StaggerSection.vue'
-import OnionSkinSection from './OnionSkinSection.vue'
+import VideoSection from './VideoSection.vue'
+import ImageSection from './ImageSection.vue'
 
 const ui = useUiStore()
 const editor = useEditorStore()
@@ -37,9 +39,11 @@ const selectedEl = computed(() => {
   return editor.getElementById([...ui.selectedIds][0]) ?? null
 })
 
-const isRect = computed(() => selectedEl.value?.type === 'rect')
-const isText = computed(() => selectedEl.value?.type === 'text')
-const isPath = computed(() => selectedEl.value?.type === 'path')
+const isText  = computed(() => selectedEl.value?.type === 'text')
+const isPath  = computed(() => selectedEl.value?.type === 'path')
+const isGroup = computed(() => selectedEl.value?.type === 'group')
+const isVideo = computed(() => selectedEl.value?.type === 'video')
+const isImage = computed(() => selectedEl.value?.type === 'image')
 </script>
 
 <template>
@@ -68,17 +72,37 @@ const isPath = computed(() => selectedEl.value?.type === 'path')
           <MultiSelectInfo v-if="isMulti" />
           <AlignmentSection v-if="hasSelection" />
           <LayoutSection />
-          <ClipContentSection v-if="isRect" />
+          <MaskSection />
+          <CropSection />
           <TextSection v-if="isText" />
           <PathSection v-if="isPath" />
+          <VideoSection v-if="isVideo" />
+          <ImageSection v-if="isImage" />
           <OpacitySection />
-          <FillSection />
-          <StrokeSection />
-          <ShadowSection />
-          <BlurSection />
+          <!-- Group info section -->
+          <template v-if="isGroup">
+            <div class="group-section">
+              <div class="group-header">Group</div>
+              <div class="group-body">
+                <div class="group-row">
+                  <span class="group-label">Children</span>
+                  <span class="group-value">{{ (selectedEl as any).childIds?.length ?? 0 }}</span>
+                </div>
+                <button class="ungroup-btn" @click="() => { const ids = editor.ungroupElements(selectedEl!.id); ui.selectAll(ids); }">
+                  Ungroup
+                </button>
+              </div>
+            </div>
+          </template>
+          <template v-if="!isGroup && !isVideo && !isImage">
+            <FillSection />
+            <StrokeSection />
+            <ShadowSection />
+            <BlurSection />
+          </template>
         </template>
         <template v-else>
-          <ArtboardSection />
+          <FrameSettingsSection />
           <GridSnapSection />
         </template>
       </template>
@@ -94,7 +118,6 @@ const isPath = computed(() => selectedEl.value?.type === 'path')
           <ElementTimingSection />
           <StaggerSection v-if="isMulti" />
         </template>
-        <OnionSkinSection />
       </template>
 
     </div>
@@ -109,12 +132,12 @@ const isPath = computed(() => selectedEl.value?.type === 'path')
   flex-direction: column;
   overflow: hidden;
   height: 100%;
+  flex: 1;
 }
 
 .tabs-bar {
   display: flex;
-  height: 2.25rem;
-  min-height: 2.25rem;
+  height: 2.375rem;
   align-items: center;
   justify-content: center;
   padding: 0 0.625rem;
@@ -134,7 +157,7 @@ const isPath = computed(() => selectedEl.value?.type === 'path')
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-3);
   cursor: pointer;
@@ -155,5 +178,34 @@ const isPath = computed(() => selectedEl.value?.type === 'path')
   flex: 1;
   overflow-y: auto;
   padding-bottom: 2rem;
+}
+
+.group-section {
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 0.75rem;
+}
+.group-header {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+.group-body { display: flex; flex-direction: column; gap: 0.5rem; }
+.group-row { display: flex; justify-content: space-between; align-items: center; }
+.group-label { font-size: 0.75rem; color: var(--text-3); }
+.group-value { font-size: 0.75rem; font-weight: 500; color: var(--text-1); font-family: var(--mono); }
+.ungroup-btn {
+  height: 1.5rem;
+  padding: 0 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text-2);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--ease);
+  &:hover { background: var(--bg-4); color: var(--text-1); border-color: var(--border-l); }
 }
 </style>

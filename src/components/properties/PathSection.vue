@@ -4,6 +4,7 @@ import { useEditorStore } from '@/stores/editorStore'
 import { useUiStore } from '@/stores/uiStore'
 import type { PathElement } from '@/types/elements'
 import type { usePathEditor } from '@/composables/usePathEditor'
+import BaseToggle from '@/components/ui/BaseToggle.vue'
 
 const editor = useEditorStore()
 const ui = useUiStore()
@@ -72,10 +73,7 @@ function setPtType(val: string) {
     </div>
 
     <!-- Closed toggle -->
-    <div class="insp-row">
-      <span class="insp-label">Closed</span>
-      <input type="checkbox" :checked="selectedEl.closed" @change="toggleClosed" />
-    </div>
+    <BaseToggle :model-value="selectedEl.closed" label="Closed" @update:model-value="toggleClosed" />
 
     <!-- Fill rule -->
     <div class="insp-row">

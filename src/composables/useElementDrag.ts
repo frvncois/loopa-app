@@ -1,7 +1,10 @@
 import { ref } from 'vue'
+import type { Ref } from 'vue'
 import type { useEditorStore } from '@/stores/editorStore'
 import type { useUiStore } from '@/stores/uiStore'
 import type { useCanvas } from '@/composables/useCanvas'
+import type { Element } from '@/types/elements'
+import type { AnimatableProps } from '@/types/animation'
 import { snapToGrid } from '@/lib/utils/math'
 
 type EditorStore = ReturnType<typeof useEditorStore>
@@ -11,30 +14,38 @@ type Canvas = ReturnType<typeof useCanvas>
 export function useElementDrag(
   editorStore: EditorStore,
   uiStore: UiStore,
-  canvas: Canvas
+  canvas: Canvas,
+  getAnimatedEl?: (id: string) => Element | null,
+  setAnimatedProp?: (id: string, props: Partial<AnimatableProps>) => void,
+  isDraggingOrigin?: Ref<boolean>
 ) {
   const isDragging = ref(false)
   let startSvg = { x: 0, y: 0 }
   let startPositions = new Map<string, { x: number; y: number }>()
 
-  function onElementMouseDown(e: MouseEvent, id: string) {
+  function onElementMouseDown(e: MouseEvent, id: string): string {
+    if (isDraggingOrigin?.value) return id
     e.stopPropagation()
-    if (!uiStore.selectedIds.has(id)) {
-      if (e.shiftKey) uiStore.addToSelection(id)
-      else uiStore.select(id)
-    }
+
+    // Group bubble-up: if clicking on a child, select the parent group (unless we're inside it)
+    const parentGroupId = editorStore.childToGroupMap.get(id)
+    const effectiveId = (parentGroupId && uiStore.activeGroupId !== parentGroupId) ? parentGroupId : id
+
+    if (e.shiftKey) uiStore.toggleSelection(effectiveId)
+    else if (!uiStore.selectedIds.has(effectiveId)) uiStore.select(effectiveId)
 
     isDragging.value = false
     startSvg = canvas.screenToSvg(e.clientX, e.clientY)
 
     startPositions = new Map()
     for (const selId of uiStore.selectedIds) {
-      const el = editorStore.getElementById(selId)
+      const el = getAnimatedEl ? getAnimatedEl(selId) : editorStore.getElementById(selId)
       if (el) startPositions.set(selId, { x: el.x, y: el.y })
     }
 
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
+    return effectiveId
   }
 
   function onMove(e: MouseEvent) {
@@ -50,7 +61,11 @@ export function useElementDrag(
         nx = snapToGrid(nx, uiStore.gridSize)
         ny = snapToGrid(ny, uiStore.gridSize)
       }
-      editorStore.updateElement(id, { x: nx, y: ny })
+      if (setAnimatedProp) {
+        setAnimatedProp(id, { x: nx, y: ny })
+      } else {
+        editorStore.updateElement(id, { x: nx, y: ny })
+      }
     }
   }
 

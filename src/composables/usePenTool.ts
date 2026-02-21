@@ -168,7 +168,7 @@ export function usePenTool(
       strokes: [{ ...base.strokes[0], visible: true, color: '4353ff', width: 2 }]
     }
 
-    editor.addElement(el)
+    editor.addElement(el, ui.activeFrameId ?? '')
     ui.select(el.id)
     ui.setTool('select')
     onSave()

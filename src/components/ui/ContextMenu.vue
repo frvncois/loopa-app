@@ -68,7 +68,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
   width: 100%;
   padding: 0.3125rem 0.5rem;
   border-radius: var(--r-sm);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   color: var(--text-2);
   background: none;
   border: none;

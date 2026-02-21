@@ -45,7 +45,7 @@ function onInput(e: Event) {
   border-radius: var(--r-sm);
   color: var(--text-1);
   padding: 0 0.4375rem;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   outline: none;
   transition: border-color var(--ease);
   min-width: 0;
@@ -58,7 +58,7 @@ function onInput(e: Event) {
 .label {
   width: 4.5rem;
   min-width: 4.5rem;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   color: var(--text-3);
   font-weight: 500;
   white-space: nowrap;

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useUiStore } from '@/stores/uiStore'
-import { computed } from 'vue'
 
 const props = defineProps<{
   artboardWidth: number
@@ -27,6 +26,6 @@ const id = Math.random().toString(36).slice(2, 8)
 </template>
 
 <style scoped>
-.grid-line { stroke: #e2e2ea; stroke-width: 0.4; opacity: 0.12; }
-.grid-line-major { stroke: #d0d0db; stroke-width: 0.6; opacity: 0.18; }
+.grid-line { stroke: #e2e2ea; stroke-width: 0.4; opacity: 0.50; }
+.grid-line-major { stroke: #d0d0db; stroke-width: 0.6; opacity: 0.75; }
 </style>

@@ -36,8 +36,8 @@ const marks = computed(() => getRulerMarks(props.totalFrames, props.pixelsPerFra
     height="22"
     @click="onRulerClick"
   >
-    <rect x="0" y="0" :width="width" height="22" fill="var(--bg-3)"/>
-    <line x1="0" y1="21" :x2="width" y2="21" stroke="var(--border)" stroke-width="1"/>
+    <rect x="0" y="0" width="100%" height="22" fill="var(--bg-3)"/>
+    <line x1="0" y1="21" x2="100%" y2="21" stroke="var(--border)" stroke-width="1"/>
 
     <g v-for="m in marks" :key="m.frame">
       <template v-if="m.major">
@@ -61,6 +61,7 @@ const marks = computed(() => getRulerMarks(props.totalFrames, props.pixelsPerFra
 .ruler {
   height: 1.375rem;
   min-height: 1.375rem;
+  width: 100%;
   background: var(--bg-3);
   border-bottom: 1px solid var(--border);
   display: block;

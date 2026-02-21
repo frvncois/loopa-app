@@ -1,9 +1,12 @@
 /**
  * VideoExporter — renders animation frames to canvas and encodes via MediaRecorder.
+ * Video elements are drawn directly via HTMLVideoElement.drawImage after each SVG frame.
  */
 import type { ExportPayload, VideoExportOptions } from '@/types/export'
+import type { VideoElement } from '@/types/elements'
 import { computeFrame } from '@/lib/engine/AnimationEngine'
 import { renderFrameSvg } from '@/lib/render/RenderEngine'
+import { getVideo } from '@/lib/utils/videoStorage'
 
 export type VideoFormat = 'webm' | 'mp4'
 
@@ -24,8 +27,99 @@ function pickMimeType(format: VideoFormat): string {
       return mime
     }
   }
-  // Final fallback
   return 'video/webm'
+}
+
+interface LoadedVideo {
+  el: VideoElement
+  video: HTMLVideoElement
+  blobUrl: string
+}
+
+async function loadVideoElement(el: VideoElement): Promise<LoadedVideo | null> {
+  try {
+    const blob = await getVideo(el.videoStorageId)
+    if (!blob) return null
+    const blobUrl = URL.createObjectURL(blob)
+    const video = document.createElement('video')
+    video.src = blobUrl
+    video.muted = true
+    video.preload = 'auto'
+    await new Promise<void>((resolve) => {
+      video.onloadedmetadata = () => resolve()
+      video.onerror = () => resolve()
+      video.load()
+    })
+    return { el, video, blobUrl }
+  } catch {
+    return null
+  }
+}
+
+function seekAndWait(video: HTMLVideoElement, time: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (Math.abs(video.currentTime - time) < 0.04) { resolve(); return }
+    const onSeeked = () => { video.removeEventListener('seeked', onSeeked); resolve() }
+    video.addEventListener('seeked', onSeeked)
+    video.currentTime = time
+    setTimeout(resolve, 500) // fallback
+  })
+}
+
+function drawVideoOnCanvas(
+  ctx: CanvasRenderingContext2D,
+  loaded: LoadedVideo,
+  scale: number
+) {
+  const { el, video } = loaded
+  ctx.save()
+  ctx.globalAlpha = el.opacity
+
+  const dx = el.x * scale
+  const dy = el.y * scale
+  const dw = el.width * scale
+  const dh = el.height * scale
+
+  if (el.rotation) {
+    const cx = dx + dw / 2
+    const cy = dy + dh / 2
+    ctx.translate(cx, cy)
+    ctx.rotate((el.rotation * Math.PI) / 180)
+    ctx.translate(-cx, -cy)
+  }
+
+  const fit = el.fit ?? 'contain'
+  const vw = video.videoWidth || el.naturalWidth || el.width
+  const vh = video.videoHeight || el.naturalHeight || el.height
+  const vAspect = vw / vh
+  const dAspect = dw / dh
+
+  if (fit === 'fill') {
+    ctx.drawImage(video, dx, dy, dw, dh)
+  } else if (fit === 'cover') {
+    let sw = vw, sh = vh, sx = 0, sy = 0
+    if (vAspect > dAspect) {
+      sw = Math.round(vh * dAspect)
+      sx = Math.round((vw - sw) / 2)
+    } else {
+      sh = Math.round(vw / dAspect)
+      sy = Math.round((vh - sh) / 2)
+    }
+    ctx.drawImage(video, sx, sy, sw, sh, dx, dy, dw, dh)
+  } else {
+    // contain
+    let rw = dw, rh = dh, rx = dx, ry = dy
+    if (vAspect > dAspect) {
+      rh = dw / vAspect
+      ry = dy + (dh - rh) / 2
+    } else {
+      rw = dh * vAspect
+      rx = dx + (dw - rw) / 2
+    }
+    ctx.drawImage(video, rx, ry, rw, rh)
+  }
+
+  ctx.restore()
 }
 
 export async function exportVideo(
@@ -47,7 +141,14 @@ export async function exportVideo(
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Could not get 2D canvas context')
 
-  // Use manual frame timing for deterministic capture
+  // Pre-load all video elements
+  const videoElements = elements.filter(el => el.type === 'video') as VideoElement[]
+  const loadedVideos: LoadedVideo[] = []
+  for (const el of videoElements) {
+    const loaded = await loadVideoElement(el)
+    if (loaded) loadedVideos.push(loaded)
+  }
+
   const stream = canvas.captureStream(0)
   const videoTrack = stream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?(): void }
 
@@ -71,7 +172,6 @@ export async function exportVideo(
     try {
       await renderFrameSvg(ctx, elements, states, { width, height, scale, background })
     } catch {
-      // Fallback: clear to background
       ctx.clearRect(0, 0, width, height)
       if (background) {
         ctx.fillStyle = background
@@ -79,19 +179,24 @@ export async function exportVideo(
       }
     }
 
-    // Request the video track to capture this frame
+    // Composite video elements on top
+    for (const loaded of loadedVideos) {
+      const time = loaded.el.trimStart + (frame / fps) * loaded.el.playbackRate
+      const clamped = Math.max(loaded.el.trimStart, Math.min(loaded.el.trimEnd, time))
+      await seekAndWait(loaded.video, clamped)
+      drawVideoOnCanvas(ctx, loaded, scale)
+    }
+
     videoTrack.requestFrame?.()
-
     config.onProgress?.(frame / totalFrames, frame)
-
-    // Yield to allow frame encoding — wait one frame-duration
     await new Promise<void>(r => setTimeout(r, Math.max(1, Math.floor(1000 / fps))))
   }
 
-  // Allow remaining data to flush
   await new Promise<void>(r => setTimeout(r, 250))
-
   recorder.stop()
+
+  // Cleanup blob URLs
+  for (const loaded of loadedVideos) URL.revokeObjectURL(loaded.blobUrl)
 
   return new Promise<Blob>((resolve, reject) => {
     recorder.onstop = () => {

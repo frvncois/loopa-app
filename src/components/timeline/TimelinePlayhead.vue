@@ -22,7 +22,7 @@ const x = computed(() => props.rulerOffset + props.frame * props.pixelsPerFrame)
   width: 1px;
   background: var(--red);
   z-index: 10;
-  pointer-events: none;
+  cursor: col-resize;
 }
 .playhead::before {
   content: '';

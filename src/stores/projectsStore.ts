@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { ProjectMeta, ProjectData } from '@/types/project'
+import type { Frame } from '@/types/frame'
+import type { Element } from '@/types/elements'
 import { generateId } from '@/lib/utils/id'
 import { lsGet, lsSet, lsRemove } from '@/composables/useLocalStorage'
 
@@ -21,6 +23,7 @@ export const useProjectsStore = defineStore('projects', () => {
 
   function createProject(name: string, width: number, height: number): string {
     const id = generateId('proj')
+    const frameId = generateId('frame')
     const now = Date.now()
 
     const meta: ProjectMeta = {
@@ -30,12 +33,51 @@ export const useProjectsStore = defineStore('projects', () => {
       artboardWidth: width, artboardHeight: height
     }
 
+    const defaultFrame: Frame = {
+      id: frameId,
+      name: 'Frame 1',
+      width,
+      height,
+      backgroundColor: 'ffffff',
+      elements: [],
+      order: 0,
+      fps: 24,
+      totalFrames: 60,
+      loop: true,
+      direction: 'normal',
+    }
+
     const data: ProjectData = {
       meta,
+      frames: [defaultFrame],
       elements: [],
       keyframes: [],
-      fps: 24,
-      totalFrames: 60
+    }
+
+    projects.value.push(meta)
+    _saveIndex()
+    lsSet(projectKey(id), data)
+    return id
+  }
+
+  function createProjectWithFrames(name: string, importedFrames: Frame[], importedElements: Element[]): string {
+    const id = generateId('proj')
+    const now = Date.now()
+    const firstFrame = importedFrames[0]
+
+    const meta: ProjectMeta = {
+      id, name,
+      createdAt: now, updatedAt: now,
+      thumbnail: null,
+      artboardWidth:  firstFrame?.width,
+      artboardHeight: firstFrame?.height,
+    }
+
+    const data: ProjectData = {
+      meta,
+      frames: importedFrames,
+      elements: importedElements,
+      keyframes: [],
     }
 
     projects.value.push(meta)
@@ -74,7 +116,7 @@ export const useProjectsStore = defineStore('projects', () => {
 
   return {
     projects, sortedProjects,
-    loadAllProjects, createProject, deleteProject,
+    loadAllProjects, createProject, createProjectWithFrames, deleteProject,
     updateProjectMeta, loadProjectData, saveProjectData
   }
 })

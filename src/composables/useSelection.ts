@@ -1,12 +1,17 @@
 import { computed } from 'vue'
 import type { useEditorStore } from '@/stores/editorStore'
 import type { useUiStore } from '@/stores/uiStore'
+import type { Element } from '@/types/elements'
 import { getMultiBounds } from '@/lib/elements/ElementBounds'
 
 type EditorStore = ReturnType<typeof useEditorStore>
 type UiStore = ReturnType<typeof useUiStore>
 
-export function useSelection(editorStore: EditorStore, uiStore: UiStore) {
+export function useSelection(
+  editorStore: EditorStore,
+  uiStore: UiStore,
+  getAnimatedEl?: (id: string) => Element | null
+) {
   const selectedElements = computed(() =>
     editorStore.elements.filter(el => uiStore.selectedIds.has(el.id))
   )
@@ -21,11 +26,20 @@ export function useSelection(editorStore: EditorStore, uiStore: UiStore) {
 
   const selectionBounds = computed(() => {
     if (selectedElements.value.length === 0) return null
-    return getMultiBounds(selectedElements.value)
+    const els = getAnimatedEl
+      ? selectedElements.value.map(el => getAnimatedEl(el.id) ?? el)
+      : selectedElements.value
+    return getMultiBounds(els)
   })
 
   function select(id: string) { uiStore.select(id) }
-  function selectAll() { uiStore.selectAll(editorStore.elements.map(el => el.id)) }
+  function selectAll() {
+    const frameId = uiStore.activeFrameId
+    const els = frameId
+      ? editorStore.getTopLevelElementsForFrame(frameId)
+      : editorStore.elements
+    uiStore.selectAll(els.map(el => el.id))
+  }
   function clearSelection() { uiStore.clearSelection() }
   function toggleSelection(id: string) { uiStore.toggleSelection(id) }
 
@@ -35,10 +49,16 @@ export function useSelection(editorStore: EditorStore, uiStore: UiStore) {
     const rw = Math.abs(rect.width)
     const rh = Math.abs(rect.height)
 
-    const ids = editorStore.elements
+    const frameId = uiStore.activeFrameId
+    const pool = frameId
+      ? editorStore.getTopLevelElementsForFrame(frameId)
+      : editorStore.elements
+
+    const ids = pool
       .filter(el => {
-        return el.x < rx + rw && el.x + el.width > rx &&
-               el.y < ry + rh && el.y + el.height > ry
+        const aEl = getAnimatedEl ? (getAnimatedEl(el.id) ?? el) : el
+        return aEl.x < rx + rw && aEl.x + aEl.width > rx &&
+               aEl.y < ry + rh && aEl.y + aEl.height > ry
       })
       .map(el => el.id)
 

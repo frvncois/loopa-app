@@ -16,11 +16,14 @@ export function useKeyframes(
   /** Record current element state as a keyframe at currentFrame for all selected elements */
   function addKeyframeForSelected(): void {
     const frame = timelineStore.currentFrame
+    const newIds: string[] = []
     for (const id of uiStore.selectedIds) {
       const el = editorStore.getElementById(id)
       if (!el) continue
+      const kfId = generateId('kf')
+      newIds.push(kfId)
       editorStore.addKeyframe({
-        id: generateId('kf'),
+        id: kfId,
         elementId: id,
         frame,
         props: {
@@ -36,6 +39,7 @@ export function useKeyframes(
         easing: 'ease-out',
       })
     }
+    if (newIds.length > 0) uiStore.selectKeyframes(newIds)
   }
 
   function removeKeyframe(id: string): void {

@@ -68,10 +68,10 @@ Common inspector values: `height: 1.625rem` (26px), label width `4.5rem` (72px),
 
 **Inspector section pattern** (Design/Animate tab):
 - Wrapper: `.section` — `padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border)`
-- Title: `.title` — `font-size: 0.6875rem; font-weight: 600; color: var(--text-2)`
+- Title: `.title` — `font-size: 0.75rem; font-weight: 600; color: var(--text-2)`
 - Checkbox title: `<label class="title" :class="{ 'is-collapsed': !active }">` — `&.is-collapsed { color: var(--text-3) }`
 - Row: `.row` — `display: flex; align-items: center; gap: 0.375rem; min-height: 1.625rem`
-- Label: `.label` — `width: 4.5rem; min-width: 4.5rem; font-size: 0.6875rem; color: var(--text-3)`
+- Label: `.label` — `width: 4.5rem; min-width: 4.5rem; font-size: 0.75rem; color: var(--text-3)`
 - Field: `.field` — `height: 1.625rem; background: var(--bg-3)` + `.field.is-pair` for 4.75rem paired inputs
 - Select: `.select` — same height/bg as `.field`
 - Checkbox row: `.check` — `display: flex; align-items: center; gap: 0.5rem`
@@ -110,13 +110,34 @@ Key: `useCanvas` (pan/zoom, screenToSvg), `useAnimation` (playback + `getAnimate
 
 ### PropertiesPanel (most critical component)
 Design tab: AlignmentSection → LayoutSection → ClipContentSection → TextSection → PathSection → OpacitySection → FillSection → StrokeSection → ShadowSection → BlurSection (when element selected); ArtboardSection + GridSnapSection (nothing selected).
-Animate tab: PlaybackSection → AnimateStatusSection → QuickAnimateSection → KeyframeDetailSection (when keyframe selected) → KeyframeListSection → ElementTimingSection → StaggerSection (multi-select) → OnionSkinSection.
+Animate tab: PlaybackSection → AnimateStatusSection → QuickAnimateSection → KeyframeDetailSection (when keyframe selected) → KeyframeListSection → ElementTimingSection → StaggerSection (multi-select).
 
 ## Build Phases (MASTER.md §13)
 
 22 phases — follow in order, test each before proceeding:
-1. Project Scaffold · 2. Types · 3. Styles · 4. Lib Utilities · 5. Base UI Components · 6. Icon Components · 7. Stores + Router · 8. Login + Dashboard ✅ · 9. Layout + Canvas Composables · 10. Canvas Components · 11. Layers Panel · 12. Properties Panel (Design) · 13. ProjectView Assembly ✅ · 14. Animation Engine · 15. Timeline + Keyframes · 16. Properties Panel (Animate) ✅ · 17. Path System + Pen Tool · 18. Onion Skinning · 19. History + Clipboard + Shortcuts · 20. Import System · 21. Export System ✅ · 22. Polish
+1. Project Scaffold · 2. Types · 3. Styles · 4. Lib Utilities · 5. Base UI Components · 6. Icon Components · 7. Stores + Router · 8. Login + Dashboard ✅ · 9. Layout + Canvas Composables · 10. Canvas Components · 11. Layers Panel · 12. Properties Panel (Design) · 13. ProjectView Assembly ✅ · 14. Animation Engine · 15. Timeline + Keyframes · 16. Properties Panel (Animate) ✅ · 17. Path System + Pen Tool · 18. History + Clipboard + Shortcuts · 19. Import System · 20. Export System ✅ · 21. Polish
 
 ## Auth
 
 Hardcoded: `test@test.com` / `1234`. Stored as boolean `loopa_auth` in localStorage. `checkAuth()` called on every route navigation.
+
+## Figma Integration
+
+OAuth flow using a Cloudflare Worker proxy — the client secret never touches the browser.
+
+**Files:**
+- `src/lib/figma/figmaAuth.ts` — Token storage, `getAuthUrl()`, `exchangeCode()`, `refreshToken()`, `ensureValidToken()`
+- `src/lib/figma/figmaApi.ts` — `figmaFetch()`, `parseFigmaUrl()`, `getFileNodes()`, `getFileImages()`
+- `src/lib/figma/FigmaNodeConverter.ts` — Figma node tree → Loopa elements
+- `src/composables/useFigmaImport.ts` — `connect()` popup, `previewLink()`, `importFromLink()`
+- `src/views/FigmaCallbackView.vue` — OAuth redirect landing page (route: `/auth/figma/callback`)
+
+**Conventions:**
+- All Figma API calls go through `VITE_FIGMA_PROXY_URL` (Cloudflare Worker), never direct to `api.figma.com`
+- Figma tokens stored in `loopa_figma_token` localStorage key as `FigmaTokens { access_token, refresh_token, expires_at, user_id }`
+- `ensureValidToken()` auto-refreshes when expired; clears tokens on 401 refresh failure
+- Node conversion primary path: RECTANGLE → RectElement, ELLIPSE → Circle/EllipseElement, TEXT → TextElement, VECTOR/BOOLEAN_OPERATION → PathElement, FRAME/GROUP → flatten children
+- Fallback for complex nodes: `getFileImages(..., 'svg')` → fetch SVG URL → `importSvg()` (SvgImporter)
+- Figma URL format: `figma.com/design/FILEKEY/Title?node-id=21-2` → node-id uses `-` separator; API wants `:` separator
+- `connect()` opens a 600×700 popup, polls `popup.closed` every 500ms, then checks `isConnected()`
+- `parseFigmaUrl()` returns `{ fileKey, nodeId }` with nodeId already converted to `:` format, or `null` if not a valid Figma URL

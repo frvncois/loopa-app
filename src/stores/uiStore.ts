@@ -1,8 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, reactive, watch } from 'vue'
 import type { ToolType } from '@/types/tools'
-import type { OnionSkinSettings } from '@/types/animation'
-
 const PANEL_STORAGE_KEY = 'loopa_panel_widths'
 
 function loadPanelWidths() {
@@ -16,7 +14,7 @@ function loadPanelWidths() {
 export const useUiStore = defineStore('ui', () => {
   const currentTool = ref<ToolType>('select')
   const selectedIds = ref<Set<string>>(new Set())
-  const selectedKeyframeId = ref<string | null>(null)
+  const selectedKeyframeIds = ref<Set<string>>(new Set())
   const activePanel = ref<'design' | 'animate'>('design')
 
   const savedWidths = loadPanelWidths()
@@ -38,22 +36,12 @@ export const useUiStore = defineStore('ui', () => {
   const snapToGrid = ref(false)
   const gridSize = ref(10)
 
-  const onionSkin = reactive<OnionSkinSettings>({
-    enabled: false,
-    framesBefore: 2,
-    framesAfter: 2,
-    opacityBefore: 0.4,
-    opacityAfter: 0.4,
-    colorBefore: 'ff4444',
-    colorAfter: '4444ff',
-    interval: 1,
-    scope: 'selected'
-  })
-
+  const activeFrameId = ref<string | null>(null)
   const activeModal = ref<string | null>(null)
   const contextMenu = reactive({ show: false, x: 0, y: 0 })
   const pathEditMode = ref(false)
   const editingPathId = ref<string | null>(null)
+  const activeGroupId = ref<string | null>(null)
 
   // ── Actions ──
   function setTool(tool: ToolType): void { currentTool.value = tool }
@@ -77,15 +65,30 @@ export const useUiStore = defineStore('ui', () => {
 
   function clearSelection(): void {
     selectedIds.value = new Set()
-    selectedKeyframeId.value = null
+    selectedKeyframeIds.value = new Set()
   }
 
   function selectAll(allIds: string[]): void {
     selectedIds.value = new Set(allIds)
   }
 
-  function selectKeyframe(id: string | null): void {
-    selectedKeyframeId.value = id
+  function selectKeyframe(id: string | null, shift = false): void {
+    if (id === null) { selectedKeyframeIds.value = new Set(); return }
+    if (shift) {
+      const s = new Set(selectedKeyframeIds.value)
+      if (s.has(id)) s.delete(id); else s.add(id)
+      selectedKeyframeIds.value = s
+    } else {
+      selectedKeyframeIds.value = new Set([id])
+    }
+  }
+
+  function selectKeyframes(ids: string[]): void {
+    selectedKeyframeIds.value = new Set(ids)
+  }
+
+  function clearKeyframeSelection(): void {
+    selectedKeyframeIds.value = new Set()
   }
 
   function setActivePanel(panel: 'design' | 'animate'): void {
@@ -112,6 +115,26 @@ export const useUiStore = defineStore('ui', () => {
     editingPathId.value = null
   }
 
+  function setActiveFrame(frameId: string): void {
+    activeFrameId.value = frameId
+    selectedIds.value = new Set()
+    selectedKeyframeIds.value = new Set()
+    activeGroupId.value = null
+    editingPathId.value = null
+    pathEditMode.value = false
+  }
+
+  function enterGroup(groupId: string): void {
+    activeGroupId.value = groupId
+    selectedIds.value = new Set()
+  }
+
+  function exitGroup(): void {
+    const groupId = activeGroupId.value
+    activeGroupId.value = null
+    selectedIds.value = groupId ? new Set([groupId]) : new Set()
+  }
+
   function showContextMenu(x: number, y: number): void {
     contextMenu.show = true
     contextMenu.x = x
@@ -121,12 +144,14 @@ export const useUiStore = defineStore('ui', () => {
   function hideContextMenu(): void { contextMenu.show = false }
 
   return {
-    currentTool, selectedIds, selectedKeyframeId, activePanel,
-    panelWidths, showGrid, snapToGrid, gridSize, onionSkin,
-    activeModal, contextMenu, pathEditMode, editingPathId,
+    currentTool, selectedIds, selectedKeyframeIds, activePanel,
+    panelWidths, showGrid, snapToGrid, gridSize,
+    activeFrameId,
+    activeModal, contextMenu, pathEditMode, editingPathId, activeGroupId,
     setTool, select, addToSelection, toggleSelection, clearSelection, selectAll,
-    selectKeyframe, setActivePanel, openModal, closeModal, setPanelWidth,
+    selectKeyframe, selectKeyframes, clearKeyframeSelection,
+    setActivePanel, openModal, closeModal, setPanelWidth,
     toggleGrid, toggleSnap, enterPathEditMode, exitPathEditMode,
-    showContextMenu, hideContextMenu
+    setActiveFrame, enterGroup, exitGroup, showContextMenu, hideContextMenu
   }
 })

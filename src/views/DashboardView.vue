@@ -3,6 +3,8 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectsStore } from '@/stores/projectsStore'
 import { useAuthStore } from '@/stores/authStore'
+import type { Frame } from '@/types/frame'
+import type { Element } from '@/types/elements'
 import IconLogo from '@/components/icons/IconLogo.vue'
 import IconLogout from '@/components/icons/IconLogout.vue'
 import IconEmpty from '@/components/icons/IconEmpty.vue'
@@ -23,6 +25,12 @@ onMounted(() => projects.loadAllProjects())
 
 function onCreate(name: string, w: number, h: number) {
   const id = projects.createProject(name, w, h)
+  showNew.value = false
+  router.push(`/project/${id}`)
+}
+
+function onCreateFromFigma(name: string, frames: Frame[], elements: Element[]) {
+  const id = projects.createProjectWithFrames(name, frames, elements)
   showNew.value = false
   router.push(`/project/${id}`)
 }
@@ -104,7 +112,7 @@ function logout() {
       New Project
     </button>
 
-    <NewProjectModal :open="showNew" @create="onCreate" @close="showNew = false" />
+    <NewProjectModal :open="showNew" @create="onCreate" @createFromFigma="onCreateFromFigma" @close="showNew = false" />
 
     <ConfirmDialog
       :open="deleteTarget !== null"

@@ -27,7 +27,8 @@ export function useClipboard(
   function paste() {
     if (!clipboard.hasPasteData) return
     const { elements, keyframes } = clipboard.paste(editor.projectId ?? '')
-    for (const el of elements) editor.addElement(el)
+    const frameId = ui.activeFrameId ?? ''
+    for (const el of elements) editor.addElement(el, frameId)
     for (const kf of keyframes) editor.addKeyframe(kf)
     ui.selectAll(elements.map(el => el.id))
   }

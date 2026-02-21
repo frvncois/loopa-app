@@ -1,7 +1,7 @@
 :root {
   /* ── Surfaces ── */
   --bg-0: #0c0c0f;
-  --bg-1: #111114;
+  --bg-1: #0f0f10;
   --bg-2: #17171b;
   --bg-3: #1c1c22;
   --bg-4: #222229;
@@ -22,7 +22,7 @@
   /* ── Accent ── */
   --accent: #4353ff;
   --accent-h: #5c6aff;
-  --accent-s: rgba(67, 83, 255, 0.10);
+  --accent-s: rgba(119, 124, 173, 0.1);
   --accent-g: rgba(67, 83, 255, 0.22);
 
   /* ── Semantic ── */

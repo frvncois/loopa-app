@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { PlaybackDirection } from '@/types/animation'
+import type { Frame } from '@/types/frame'
 
 export const useTimelineStore = defineStore('timeline', () => {
   const currentFrame = ref(0)
@@ -82,15 +83,56 @@ export const useTimelineStore = defineStore('timeline', () => {
   function nextFrame(): void { seek(currentFrame.value + 1) }
   function prevFrame(): void { seek(currentFrame.value - 1) }
 
-  function setFps(val: number): void { fps.value = Math.max(1, Math.min(120, val)) }
-  function setTotalFrames(frames: number): void { totalFrames.value = Math.max(1, frames) }
-  function setLoop(val: boolean): void { loop.value = val }
-  function setDirection(dir: PlaybackDirection): void { direction.value = dir }
+  // ── Frame sync ──
+  // Loads playback settings from a Frame object (called when active frame changes)
+  function syncFromFrame(frame: Frame): void {
+    pause()
+    currentFrame.value = 0
+    fps.value = frame.fps
+    totalFrames.value = frame.totalFrames
+    loop.value = frame.loop
+    direction.value = frame.direction
+  }
+
+  // setters write back to the active frame via editorStore
+  // (import is deferred to avoid circular dep at module load time)
+  function setFps(val: number): void {
+    fps.value = Math.max(1, Math.min(120, val))
+    _writeBack({ fps: fps.value })
+  }
+
+  function setTotalFrames(frames: number): void {
+    totalFrames.value = Math.max(1, frames)
+    _writeBack({ totalFrames: totalFrames.value })
+  }
+
+  function setLoop(val: boolean): void {
+    loop.value = val
+    _writeBack({ loop: val })
+  }
+
+  function setDirection(dir: PlaybackDirection): void {
+    direction.value = dir
+    _writeBack({ direction: dir })
+  }
+
+  function _writeBack(updates: Partial<Frame>): void {
+    // Deferred import to avoid circular dependency at module init
+    import('@/stores/uiStore').then(({ useUiStore }) => {
+      import('@/stores/editorStore').then(({ useEditorStore }) => {
+        const ui = useUiStore()
+        const editor = useEditorStore()
+        if (ui.activeFrameId) {
+          editor.updateFrame(ui.activeFrameId, updates)
+        }
+      })
+    })
+  }
 
   return {
     currentFrame, totalFrames, fps, isPlaying, loop, direction,
     duration, currentTime, totalTime,
     play, pause, stop, togglePlay, seek, nextFrame, prevFrame,
-    setFps, setTotalFrames, setLoop, setDirection
+    syncFromFrame, setFps, setTotalFrames, setLoop, setDirection
   }
 })

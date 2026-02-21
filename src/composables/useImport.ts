@@ -8,8 +8,9 @@ export function useImport() {
 
   function importSvgString(svg: string): void {
     const result = importSvg(svg)
+    const frameId = ui.activeFrameId ?? ''
     for (const el of result.elements) {
-      editor.addElement(el)
+      editor.addElement(el, frameId)
     }
     if (result.elements.length > 0) {
       ui.selectAll(result.elements.map(e => e.id))

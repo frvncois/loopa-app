@@ -2,6 +2,7 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseProgress from '@/components/ui/BaseProgress.vue'
+import BaseToggle from '@/components/ui/BaseToggle.vue'
 import { useExport } from '@/composables/useExport'
 import { useTimelineStore } from '@/stores/timelineStore'
 
@@ -236,14 +237,8 @@ onUnmounted(() => {
     <!-- ── LOTTIE tab ──────────────────────────────────────────────────────── -->
     <div v-if="activeTab === 'lottie'" class="tab-content">
       <div class="options-row">
-        <label class="opt-label">
-          <input type="checkbox" v-model="lottieLoop" />
-          Loop
-        </label>
-        <label class="opt-label">
-          <input type="checkbox" v-model="lottiePretty" />
-          Pretty print
-        </label>
+        <BaseToggle v-model="lottieLoop" label="Loop" />
+        <BaseToggle v-model="lottiePretty" label="Pretty print" />
       </div>
 
       <!-- Lottie preview -->
@@ -297,10 +292,7 @@ onUnmounted(() => {
             <option :value="16_000_000">16 Mbps</option>
           </select>
         </div>
-        <label class="opt-label full">
-          <input type="checkbox" v-model="videoLoop" />
-          Loop
-        </label>
+        <BaseToggle v-model="videoLoop" label="Loop" />
       </div>
 
       <!-- Progress -->
@@ -336,14 +328,8 @@ onUnmounted(() => {
             <option :value="16_000_000">16 Mbps</option>
           </select>
         </div>
-        <label class="opt-label full">
-          <input type="checkbox" v-model="webmTransparent" />
-          Transparent background (alpha)
-        </label>
-        <label class="opt-label full">
-          <input type="checkbox" v-model="videoLoop" />
-          Loop
-        </label>
+        <BaseToggle v-model="webmTransparent" label="Transparent background (alpha)" />
+        <BaseToggle v-model="videoLoop" label="Loop" />
       </div>
 
       <div v-if="isRendering" class="progress-area">
@@ -358,14 +344,8 @@ onUnmounted(() => {
     <!-- ── SVG tab ────────────────────────────────────────────────────────────── -->
     <div v-else class="tab-content">
       <div class="options-row">
-        <label class="opt-label">
-          <input type="checkbox" v-model="svgAnimated" />
-          Animated (CSS/SMIL)
-        </label>
-        <label class="opt-label" v-if="svgAnimated">
-          <input type="checkbox" v-model="svgLoop" />
-          Loop
-        </label>
+        <BaseToggle v-model="svgAnimated" label="Animated (CSS/SMIL)" />
+        <BaseToggle v-if="svgAnimated" v-model="svgLoop" label="Loop" />
       </div>
 
       <div class="preview-area">
@@ -489,18 +469,6 @@ onUnmounted(() => {
   font-family: var(--mono);
   text-align: right;
 }
-.opt-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--text-2);
-  cursor: pointer;
-  user-select: none;
-  input[type="checkbox"] { accent-color: var(--accent); }
-}
-.opt-label.full { margin-top: 2px; }
-
 .toggle-pair {
   display: flex;
   gap: 2px;

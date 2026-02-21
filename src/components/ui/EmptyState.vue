@@ -33,6 +33,6 @@ defineProps<{
 }
 .icon { color: var(--text-4); margin-bottom: 0.25rem; }
 .title { font-size: 0.75rem; font-weight: 500; color: var(--text-3); }
-.subtitle { font-size: 0.6875rem; color: var(--text-4); }
+.subtitle { font-size: 0.75rem; color: var(--text-4); }
 .action { margin-top: 0.5rem; }
 </style>

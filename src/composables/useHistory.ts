@@ -2,8 +2,10 @@ import { ref, computed } from 'vue'
 import type { useEditorStore } from '@/stores/editorStore'
 import type { Element } from '@/types/elements'
 import type { Keyframe } from '@/types/animation'
+import type { Frame } from '@/types/frame'
 
 interface Snapshot {
+  frames: Frame[]
   elements: Element[]
   keyframes: Keyframe[]
 }
@@ -18,12 +20,14 @@ export function useHistory(editor: ReturnType<typeof useEditorStore>) {
 
   function snapshot(): Snapshot {
     return {
+      frames: JSON.parse(JSON.stringify(editor.frames)),
       elements: JSON.parse(JSON.stringify(editor.elements)),
       keyframes: JSON.parse(JSON.stringify(editor.keyframes)),
     }
   }
 
   function restore(snap: Snapshot) {
+    editor.frames.splice(0, editor.frames.length, ...snap.frames)
     editor.elements.splice(0, editor.elements.length, ...snap.elements)
     editor.keyframes.splice(0, editor.keyframes.length, ...snap.keyframes)
   }

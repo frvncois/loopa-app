@@ -59,13 +59,35 @@ function walkElement(el: Element, parentTransform: DecomposedTransform): ParsedN
   const ownTransform = parseTransformString(attrs['transform'] ?? '')
   const accumulated = combineTransforms(parentTransform, ownTransform)
 
-  if (tag === 'g' || tag === 'svg') {
-    // Recurse into groups, propagating accumulated transform
+  if (tag === 'svg') {
+    // SVG root: flatten all children
     const children: ParsedNode[] = []
     for (const child of el.children) {
       children.push(...walkElement(child, accumulated))
     }
     return children
+  }
+
+  if (tag === 'g') {
+    // Collect children with accumulated transforms (absolute canvas positions)
+    const childNodes: ParsedNode[] = []
+    for (const child of el.children) {
+      childNodes.push(...walkElement(child, accumulated))
+    }
+    if (childNodes.length === 0) return []
+    // Single-child <g> (transform wrapper): flatten to avoid unnecessary groups
+    if (childNodes.length === 1) return childNodes
+    // Multi-child <g>: return as a group node preserving structure
+    const groupNode: ParsedNode = {
+      tag: 'g',
+      id: attrs['id'] ?? '',
+      attrs,
+      style,
+      transform: accumulated,
+      textContent: '',
+      children: childNodes,
+    }
+    return [groupNode]
   }
 
   if (!SHAPE_TAGS.has(tag)) return []

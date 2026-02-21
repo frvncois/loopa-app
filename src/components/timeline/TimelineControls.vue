@@ -82,8 +82,7 @@ const timeline = useTimelineStore()
 
 <style scoped>
 .controls {
-  height: 2.125rem;
-  min-height: 2.125rem;
+  height: 2.375rem;
   display: flex;
   align-items: center;
   padding: 0 0.5rem;
@@ -93,7 +92,7 @@ const timeline = useTimelineStore()
 }
 .divider { width: 1px; height: 1.375rem; background: var(--border); margin: 0 0.125rem; }
 .spacer { flex: 1; }
-.time { font-family: var(--mono); font-size: 0.6875rem; color: var(--text-2); min-width: 4rem; }
+.time { font-family: var(--mono); font-size: 0.75rem; color: var(--text-2); min-width: 4rem; }
 .hint { font-size: 0.625rem; color: var(--text-3); }
 .mini-input {
   height: 1.375rem;
@@ -125,12 +124,12 @@ const timeline = useTimelineStore()
   justify-content: center;
   gap: 0.25rem;
   font-weight: 500;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   transition: all var(--ease);
   &:hover { background: var(--bg-5); color: var(--text-1); }
   &.is-icon { width: 1.625rem; padding: 0; }
   &.is-sm {
-    height: 1.5rem; padding: 0 0.375rem; font-size: 0.6875rem;
+    height: 1.5rem; padding: 0 0.375rem; font-size: 0.75rem;
     &.is-icon { width: 1.5rem; }
   }
   &.is-ghost {

@@ -1,10 +1,11 @@
 import type {
   Element, ElementType,
   RectElement, CircleElement, EllipseElement, LineElement,
-  PolygonElement, StarElement, TextElement, PathElement,
+  PolygonElement, StarElement, TextElement, PathElement, GroupElement,
   FillEntry, StrokeEntry, ShadowEntry
 } from '@/types/elements'
 import { generateId } from '@/lib/utils/id'
+import { getMultiBounds } from '@/lib/elements/ElementBounds'
 
 const counters: Record<string, number> = {}
 
@@ -41,7 +42,7 @@ function base(type: ElementType, x = 200, y = 200, w = 100, h = 100): Omit<Eleme
     strokes: [defaultStroke()],
     shadows: [defaultShadow()],
     blur: 0,
-    visible: true, locked: false, clipContent: false,
+    visible: true, locked: false,
     flipX: false, flipY: false
   }
 }
@@ -128,6 +129,45 @@ export function createDefaultElement(type: ElementType): Element {
       }
       return el
     }
+    case 'group': {
+      const el: GroupElement = {
+        ...(base('group', 200, 200, 100, 100) as any),
+        type: 'group',
+        fills: [],
+        childIds: []
+      }
+      return el
+    }
+  }
+}
+
+export function createGroup(childIds: string[], allElements: Element[]): GroupElement {
+  const childEls = childIds
+    .map(id => allElements.find(e => e.id === id))
+    .filter(Boolean) as Element[]
+  const bounds = getMultiBounds(childEls)
+  return {
+    id: generateId('el'),
+    type: 'group',
+    name: nextName('group'),
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    rotation: 0,
+    scaleX: 1,
+    scaleY: 1,
+    opacity: 1,
+    blendMode: 'normal',
+    fills: [],
+    strokes: [defaultStroke()],
+    shadows: [defaultShadow()],
+    blur: 0,
+    visible: true,
+    locked: false,
+    flipX: false,
+    flipY: false,
+    childIds,
   }
 }
 

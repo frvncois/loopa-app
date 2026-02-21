@@ -26,6 +26,8 @@ export interface AnimatableProps {
   fontSize?: number
   d?: string
   points?: PathPoint[]
+  transformOriginX?: number
+  transformOriginY?: number
 }
 
 export interface Keyframe {
@@ -43,18 +45,6 @@ export interface ComputedElementState {
 }
 
 export type PlaybackDirection = 'normal' | 'reverse' | 'alternate' | 'alternate-reverse'
-
-export interface OnionSkinSettings {
-  enabled: boolean
-  framesBefore: number
-  framesAfter: number
-  opacityBefore: number
-  opacityAfter: number
-  colorBefore: string
-  colorAfter: string
-  interval: number
-  scope: 'selected' | 'all'
-}
 
 export interface AnimationPreset {
   id: string

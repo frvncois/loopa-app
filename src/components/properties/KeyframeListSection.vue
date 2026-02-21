@@ -17,15 +17,15 @@ const elementKfs = computed<Keyframe[]>(() => {
     .sort((a, b) => a.frame - b.frame)
 })
 
-function selectKf(kf: Keyframe) {
-  ui.selectKeyframe(kf.id)
+function selectKf(kf: Keyframe, e: MouseEvent) {
+  ui.selectKeyframe(kf.id, e.shiftKey)
   timeline.seek(kf.frame)
 }
 
 function deleteKf(kf: Keyframe, e: MouseEvent) {
   e.stopPropagation()
   editor.deleteKeyframe(kf.id)
-  if (ui.selectedKeyframeId === kf.id) ui.selectKeyframe(null)
+  if (ui.selectedKeyframeIds.has(kf.id)) ui.selectKeyframe(null)
 }
 </script>
 
@@ -36,8 +36,8 @@ function deleteKf(kf: Keyframe, e: MouseEvent) {
       v-for="kf in elementKfs"
       :key="kf.id"
       class="item"
-      :class="{ 'is-selected': kf.id === ui.selectedKeyframeId }"
-      @click="selectKf(kf)"
+      :class="{ 'is-selected': ui.selectedKeyframeIds.has(kf.id) }"
+      @click="selectKf(kf, $event)"
     >
       <div class="diamond" />
       <span class="frame">Frame {{ kf.frame }}</span>
@@ -49,11 +49,11 @@ function deleteKf(kf: Keyframe, e: MouseEvent) {
 
 <style scoped>
 .section { padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border); }
-.title { font-size: 0.6875rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.375rem; }
+.title { font-size: 0.75rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.375rem; }
 .item {
   display: flex; align-items: center; gap: 0.5rem; height: 1.75rem;
   padding: 0 0.375rem; border-radius: var(--r-sm); cursor: pointer;
-  transition: background var(--ease); font-size: 0.6875rem;
+  transition: background var(--ease); font-size: 0.75rem;
   &:hover { background: var(--bg-4); }
   &.is-selected {
     background: var(--accent-s); color: var(--accent);

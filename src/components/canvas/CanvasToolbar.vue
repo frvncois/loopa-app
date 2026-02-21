@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import { useUiStore } from '@/stores/uiStore'
 import type { Component } from 'vue'
 import type { ToolType } from '@/types/tools'
+import type { useCropTool } from '@/composables/useCropTool'
 import IconCursor from '@/components/icons/IconCursor.vue'
 import IconRect from '@/components/icons/IconRect.vue'
 import IconCircle from '@/components/icons/IconCircle.vue'
@@ -10,9 +11,12 @@ import IconEllipse from '@/components/icons/IconEllipse.vue'
 import IconLine from '@/components/icons/IconLine.vue'
 import IconPen from '@/components/icons/IconPen.vue'
 import IconText from '@/components/icons/IconText.vue'
-import IconHand from '@/components/icons/IconHand.vue'
+import IconCrop from '@/components/icons/IconCrop.vue'
+import IconImage from '@/components/icons/IconImage.vue'
+import IconVideo from '@/components/icons/IconVideo.vue'
 
 const ui = useUiStore()
+const cropTool = inject<ReturnType<typeof useCropTool> | null>('cropTool', null)
 
 const tools: { id: ToolType; title: string; key: string; icon: Component }[] = [
   { id: 'select', title: 'Select (V)', key: 'V', icon: IconCursor },
@@ -24,7 +28,20 @@ const tools: { id: ToolType; title: string; key: string; icon: Component }[] = [
   { id: 'text', title: 'Text (T)', key: 'T', icon: IconText },
 ]
 
-const currentLabel = computed(() => tools.find(t => t.id === ui.currentTool)?.title ?? 'Select')
+const currentLabel = computed(() => {
+  if (ui.currentTool === 'crop') return 'Crop (active)'
+  return tools.find(t => t.id === ui.currentTool)?.title ?? 'Select'
+})
+
+// Crop button: enabled when exactly one element is selected and we're not already in crop mode
+const canCrop = computed(() =>
+  ui.selectedIds.size === 1 && !(cropTool?.isCropMode.value)
+)
+
+function onCropClick() {
+  const id = [...ui.selectedIds][0]
+  if (id) cropTool?.enterCropMode(id)
+}
 </script>
 
 <template>
@@ -42,17 +59,32 @@ const currentLabel = computed(() => tools.find(t => t.id === ui.currentTool)?.ti
       </button>
     </template>
 
-    <div class="divider" role="separator" />
-
+    <div class="divider" />
     <button
       class="button is-ghost is-icon"
-      :class="{ 'is-active': ui.currentTool === 'hand' }"
-      title="Hand (H)"
-      aria-label="Hand (H)"
-      :aria-pressed="ui.currentTool === 'hand'"
-      @click="ui.setTool('hand')"
+      :class="{ 'is-active': ui.currentTool === 'crop' }"
+      title="Crop (select one element first)"
+      aria-label="Crop"
+      :disabled="!canCrop && ui.currentTool !== 'crop'"
+      @click="onCropClick"
     >
-      <IconHand />
+      <IconCrop />
+    </button>
+    <button
+      class="button is-ghost is-icon"
+      title="Add Image"
+      aria-label="Add Image"
+      @click="ui.openModal('image')"
+    >
+      <IconImage />
+    </button>
+    <button
+      class="button is-ghost is-icon"
+      title="Add Video"
+      aria-label="Add Video"
+      @click="ui.openModal('video')"
+    >
+      <IconVideo />
     </button>
 
     <div class="spacer" />

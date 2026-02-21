@@ -57,15 +57,23 @@ export function useCanvas(viewportRef: Ref<HTMLElement | null>) {
     e.preventDefault()
     const el = viewportRef.value
     if (!el) return
-    const rect = el.getBoundingClientRect()
-    const mouseX = e.clientX - rect.left
-    const mouseY = e.clientY - rect.top
-    const oldZoom = zoom.value
-    const delta = e.deltaY > 0 ? 0.9 : 1.1
-    const newZoom = clamp(oldZoom * delta, 0.05, 10)
-    panX.value = mouseX - (mouseX - panX.value) * (newZoom / oldZoom)
-    panY.value = mouseY - (mouseY - panY.value) * (newZoom / oldZoom)
-    zoom.value = newZoom
+
+    if (e.ctrlKey || e.metaKey) {
+      // Zoom (ctrl+wheel or trackpad pinch — pinch sends ctrlKey=true)
+      const rect = el.getBoundingClientRect()
+      const mouseX = e.clientX - rect.left
+      const mouseY = e.clientY - rect.top
+      const oldZoom = zoom.value
+      const delta = e.deltaY > 0 ? 0.9 : 1.1
+      const newZoom = clamp(oldZoom * delta, 0.05, 10)
+      panX.value = mouseX - (mouseX - panX.value) * (newZoom / oldZoom)
+      panY.value = mouseY - (mouseY - panY.value) * (newZoom / oldZoom)
+      zoom.value = newZoom
+    } else {
+      // Pan (plain scroll)
+      panX.value -= e.deltaX
+      panY.value -= e.deltaY
+    }
   }
 
   function startPan(e: MouseEvent) {

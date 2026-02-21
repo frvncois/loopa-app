@@ -21,6 +21,12 @@ const routes = [
     meta: { auth: true },
     props: true
   },
+  {
+    path: '/auth/figma/callback',
+    name: 'FigmaCallback',
+    component: () => import('@/views/FigmaCallbackView.vue'),
+    meta: {}   // accessible regardless of auth state — no guard
+  },
   { path: '/:pathMatch(.*)*', redirect: '/' }
 ]
 

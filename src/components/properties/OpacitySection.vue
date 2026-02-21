@@ -43,7 +43,7 @@ function updateOpacity(val: string) {
 .label {
   width: 4.5rem;
   min-width: 4.5rem;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   color: var(--text-3);
   font-weight: 500;
   &.is-bold { font-weight: 600; color: var(--text-2); }
@@ -56,7 +56,7 @@ function updateOpacity(val: string) {
   color: var(--text-1);
   padding: 0 0.4375rem;
   font-family: var(--mono);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   outline: none;
   transition: border-color var(--ease);
   &:focus { border-color: var(--accent); }

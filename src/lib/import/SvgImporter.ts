@@ -2,10 +2,11 @@ import { generateId } from '@/lib/utils/id'
 import { rgbToHex } from '@/lib/utils/color'
 import type {
   Element, RectElement, CircleElement, EllipseElement, LineElement,
-  PathElement, PolygonElement, TextElement, FillEntry, StrokeEntry, ShadowEntry
+  PathElement, PolygonElement, TextElement, GroupElement, FillEntry, StrokeEntry, ShadowEntry
 } from '@/types/elements'
 import type { ImportResult, ImportWarning } from '@/types/export'
 import { parseSvgDocument, type ParsedNode } from './SvgParser'
+import { getMultiBounds } from '@/lib/elements/ElementBounds'
 
 // ── Color helpers ───────────────────────────────────────────────────────────
 
@@ -95,7 +96,6 @@ function baseProps(node: ParsedNode, overrideName?: string) {
     blur: 0,
     visible: true,
     locked: false,
-    clipContent: false,
     flipX: false,
     flipY: false,
   }
@@ -258,6 +258,55 @@ function convertText(node: ParsedNode): TextElement | null {
   }
 }
 
+// ── Node converter (handles all tags including groups) ───────────────────────
+
+function convertNode(node: ParsedNode, warnings: ImportWarning[], elements: Element[]): Element | null {
+  switch (node.tag) {
+    case 'rect':     return convertRect(node, warnings)
+    case 'circle':   return convertCircle(node)
+    case 'ellipse':  return convertEllipse(node)
+    case 'line':     return convertLine(node)
+    case 'path':     return convertPath(node, warnings)
+    case 'polygon':  return convertPolygon(node, true)
+    case 'polyline': return convertPolygon(node, false)
+    case 'text':     return convertText(node)
+    case 'g': {
+      // Recursively convert children; they share the elements array
+      const children: Element[] = []
+      for (const child of node.children) {
+        const childEl = convertNode(child, warnings, elements)
+        if (childEl) {
+          elements.push(childEl)
+          children.push(childEl)
+        }
+      }
+      if (children.length === 0) return null
+      const bounds = getMultiBounds(children)
+      const group: GroupElement = {
+        id: generateId('el'),
+        type: 'group',
+        name: node.id || 'Group',
+        x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,
+        rotation: node.transform.rotation,
+        scaleX: node.transform.scaleX,
+        scaleY: node.transform.scaleY,
+        opacity: resolveOpacity(node, 'opacity'),
+        blendMode: 'normal',
+        fills: [],
+        strokes: [makeDefaultStroke()],
+        shadows: [makeDefaultShadow()],
+        blur: 0,
+        visible: true, locked: false, flipX: false, flipY: false,
+        childIds: children.map(c => c.id),
+      }
+      return group
+    }
+    default:
+      warnings.push({ type: 'unsupported', message: `Skipped unsupported element: <${node.tag}>` })
+      return null
+  }
+}
+
 // ── Main export ─────────────────────────────────────────────────────────────
 
 export function importSvg(svgString: string): ImportResult {
@@ -272,26 +321,12 @@ export function importSvg(svgString: string): ImportResult {
   const elements: Element[] = []
 
   for (const node of nodes) {
-    let el: Element | null = null
-
     try {
-      switch (node.tag) {
-        case 'rect':     el = convertRect(node, warnings); break
-        case 'circle':   el = convertCircle(node); break
-        case 'ellipse':  el = convertEllipse(node); break
-        case 'line':     el = convertLine(node); break
-        case 'path':     el = convertPath(node, warnings); break
-        case 'polygon':  el = convertPolygon(node, true); break
-        case 'polyline': el = convertPolygon(node, false); break
-        case 'text':     el = convertText(node); break
-        default:
-          warnings.push({ type: 'unsupported', message: `Skipped unsupported element: <${node.tag}>` })
-      }
+      const el = convertNode(node, warnings, elements)
+      if (el) elements.push(el)
     } catch (_e) {
       warnings.push({ type: 'error', message: `Failed to convert <${node.tag}> "${node.id}"` })
     }
-
-    if (el) elements.push(el)
   }
 
   if (nodes.some(n => n.attrs['fill']?.startsWith('url(') || n.style['fill']?.startsWith('url('))) {

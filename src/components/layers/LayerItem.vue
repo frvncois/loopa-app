@@ -17,11 +17,14 @@ const props = defineProps<{
   selected: boolean
   animated?: boolean
   dragOver?: boolean
+  expanded?: boolean
+  depth?: number
 }>()
 
 const emit = defineEmits<{
   click: [e: MouseEvent]
   toggleVisibility: []
+  toggleExpand: []
   dragStart: [id: string]
   dragOver: [id: string]
   drop: [id: string]
@@ -36,6 +39,7 @@ const ICONS: Record<string, Component> = {
   star: IconStar,
   text: IconText,
   path: IconPen,
+  group: null as any,  // uses inline SVG
 }
 </script>
 
@@ -43,15 +47,31 @@ const ICONS: Record<string, Component> = {
   <div
     class="layer"
     :class="{ 'is-selected': selected, 'is-locked': element.locked, 'is-drag-over': dragOver }"
-    :style="{ opacity: element.visible ? 1 : 0.45 }"
-    draggable="true"
+    :style="{ opacity: element.visible ? 1 : 0.45, paddingLeft: `${0.5 + (depth ?? 0) * 0.75}rem` }"
+    :draggable="!depth"
     @click="emit('click', $event)"
-    @dragstart="emit('dragStart', element.id)"
-    @dragover.prevent="emit('dragOver', element.id)"
-    @drop.prevent="emit('drop', element.id)"
+    @dragstart="!depth && emit('dragStart', element.id)"
+    @dragover.prevent="!depth && emit('dragOver', element.id)"
+    @drop.prevent="!depth && emit('drop', element.id)"
   >
+    <!-- Expand chevron for groups -->
+    <button
+      v-if="element.type === 'group'"
+      class="chevron"
+      :class="{ 'is-expanded': expanded }"
+      @click.stop="emit('toggleExpand')"
+    >
+      <svg viewBox="0 0 8 8" width="8" height="8" fill="none">
+        <path d="M2 3L4 5L6 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
     <div class="icon">
-      <component :is="ICONS[element.type] ?? ICONS.rect" />
+      <!-- Folder icon for groups -->
+      <svg v-if="element.type === 'group'" viewBox="0 0 12 12" width="10" height="10" fill="none">
+        <path d="M1 3.5C1 2.948 1.448 2.5 2 2.5h2.5l1 1H10c.552 0 1 .448 1 1V9c0 .552-.448 1-1 1H2c-.552 0-1-.448-1-1V3.5z" stroke="currentColor" stroke-width="1" fill="none"/>
+      </svg>
+      <component v-else :is="ICONS[element.type] ?? ICONS.rect" />
     </div>
     <span class="name">{{ element.name }}</span>
 
@@ -73,6 +93,23 @@ const ICONS: Record<string, Component> = {
 </template>
 
 <style scoped>
+.chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text-4);
+  transform: rotate(-90deg);
+  transition: transform var(--ease);
+  &.is-expanded { transform: rotate(0deg); }
+  &:hover { color: var(--text-2); }
+}
 .layer {
   display: flex;
   align-items: center;
@@ -105,7 +142,7 @@ const ICONS: Record<string, Component> = {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   color: var(--text-1);
 }
 .vis {

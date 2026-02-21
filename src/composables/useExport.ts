@@ -1,5 +1,6 @@
 import { reactive } from 'vue'
 import { useEditorStore } from '@/stores/editorStore'
+import { useUiStore } from '@/stores/uiStore'
 import { useTimelineStore } from '@/stores/timelineStore'
 import { SvgExporter } from '@/lib/exporters/SvgExporter'
 import { LottieExporter } from '@/lib/exporters/LottieExporter'
@@ -12,6 +13,7 @@ import type {
 
 export function useExport() {
   const editor   = useEditorStore()
+  const ui       = useUiStore()
   const timeline = useTimelineStore()
 
   const progress = reactive<ExportProgress>({
@@ -39,9 +41,12 @@ export function useExport() {
     options: ExportPayload['options'],
     artboard: { width: number; height: number }
   ): ExportPayload {
+    const frameId = ui.activeFrameId
+    const elements = frameId ? editor.getElementsForFrame(frameId) : editor.elements
+    const keyframes = frameId ? editor.getKeyframesForFrame(frameId) : editor.keyframes
     return {
-      elements: editor.elements,
-      keyframes: editor.keyframes,
+      elements,
+      keyframes,
       artboard,
       fps: timeline.fps,
       totalFrames: timeline.totalFrames,

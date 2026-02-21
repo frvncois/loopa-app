@@ -57,23 +57,23 @@ function applyStagger() {
 
 <style scoped>
 .section { padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border); }
-.title { font-size: 0.6875rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.5rem; }
+.title { font-size: 0.75rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.5rem; }
 .row { display: flex; align-items: center; gap: 0.375rem; margin-bottom: 0.375rem; min-height: 1.625rem; }
-.label { width: 4.5rem; min-width: 4.5rem; font-size: 0.6875rem; color: var(--text-3); font-weight: 500; }
+.label { width: 4.5rem; min-width: 4.5rem; font-size: 0.75rem; color: var(--text-3); font-weight: 500; }
 .field {
   flex: 1; height: 1.625rem; background: var(--bg-3); border: 1px solid var(--border);
   border-radius: var(--r-sm); color: var(--text-1); padding: 0 0.4375rem;
-  font-family: var(--mono); font-size: 0.6875rem; outline: none; min-width: 0;
+  font-family: var(--mono); font-size: 0.75rem; outline: none; min-width: 0;
   &:focus { border-color: var(--accent); }
 }
 .select {
   flex: 1; height: 1.625rem; background: var(--bg-3); border: 1px solid var(--border);
-  border-radius: var(--r-sm); color: var(--text-1); padding: 0 0.4375rem; font-size: 0.6875rem; outline: none;
+  border-radius: var(--r-sm); color: var(--text-1); padding: 0 0.4375rem; font-size: 0.75rem; outline: none;
 }
 .unit { font-size: 0.625rem; color: var(--text-4); min-width: 1.25rem; }
 .apply {
   width: 100%; height: 1.75rem; background: var(--accent); color: #fff; border: none;
-  border-radius: var(--r-sm); font-size: 0.6875rem; font-weight: 600; cursor: pointer;
+  border-radius: var(--r-sm); font-size: 0.75rem; font-weight: 600; cursor: pointer;
   margin-top: 0.25rem; transition: background var(--ease);
   &:hover { background: var(--accent-h); }
 }

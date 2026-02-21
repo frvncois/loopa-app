@@ -62,13 +62,13 @@ function save() {
 <style scoped>
 .form { display: flex; flex-direction: column; gap: 0.875rem; }
 .field { display: flex; flex-direction: column; gap: 0.3125rem; }
-.label { font-size: 0.6875rem; font-weight: 500; color: var(--text-3); }
+.label { font-size: 0.75rem; font-weight: 500; color: var(--text-3); }
 .input {
   height: 1.875rem; background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--r-sm);
-  color: var(--text-1); padding: 0 0.5rem; font-size: 0.6875rem; outline: none; transition: border-color var(--ease);
+  color: var(--text-1); padding: 0 0.5rem; font-size: 0.75rem; outline: none; transition: border-color var(--ease);
   &:focus { border-color: var(--accent); }
   &.is-compact { width: 5rem; flex: none; font-family: var(--mono); }
 }
 .size-row { display: flex; align-items: center; gap: 0.5rem; }
-.times { font-size: 0.6875rem; color: var(--text-4); }
+.times { font-size: 0.75rem; color: var(--text-4); }
 </style>

@@ -1,5 +1,6 @@
 import type { Element } from './elements'
 import type { Keyframe } from './animation'
+import type { Frame } from './frame'
 
 export type ExportFormat = 'lottie' | 'mp4' | 'webm' | 'svg'
 
@@ -44,7 +45,9 @@ export interface ExportProgress {
 }
 
 export interface ImportResult {
-  elements: any[]
+  frames?: Frame[]      // present when import creates structured Loopa frames (Figma)
+  elements: Element[]
+  keyframes?: never[]   // reserved, always empty for now
   warnings: ImportWarning[]
   metadata: { sourceWidth: number; sourceHeight: number; layerCount: number; isFigmaExport: boolean }
 }

@@ -70,7 +70,7 @@ function applyPreset(presetId: string) {
 
 <style scoped>
 .section { padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border); }
-.title { font-size: 0.6875rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.5rem; }
+.title { font-size: 0.75rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.5rem; }
 .preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; }
 .preset {
   height: 1.875rem; display: flex; align-items: center; justify-content: center;
@@ -81,16 +81,16 @@ function applyPreset(presetId: string) {
   svg { width: 0.75rem; height: 0.75rem; opacity: 0.6; flex-shrink: 0; }
 }
 .row { display: flex; align-items: center; gap: 0.375rem; margin-bottom: 0.375rem; min-height: 1.625rem; }
-.label { width: 4.5rem; min-width: 4.5rem; font-size: 0.6875rem; color: var(--text-3); font-weight: 500; }
+.label { width: 4.5rem; min-width: 4.5rem; font-size: 0.75rem; color: var(--text-3); font-weight: 500; }
 .field {
   flex: 1; height: 1.625rem; background: var(--bg-3); border: 1px solid var(--border);
   border-radius: var(--r-sm); color: var(--text-1); padding: 0 0.4375rem;
-  font-family: var(--mono); font-size: 0.6875rem; outline: none; min-width: 0;
+  font-family: var(--mono); font-size: 0.75rem; outline: none; min-width: 0;
   &:focus { border-color: var(--accent); }
 }
 .select {
   flex: 1; height: 1.625rem; background: var(--bg-3); border: 1px solid var(--border);
-  border-radius: var(--r-sm); color: var(--text-1); padding: 0 0.4375rem; font-size: 0.6875rem; outline: none;
+  border-radius: var(--r-sm); color: var(--text-1); padding: 0 0.4375rem; font-size: 0.75rem; outline: none;
 }
 .unit { font-size: 0.625rem; color: var(--text-4); min-width: 1.25rem; }
 </style>

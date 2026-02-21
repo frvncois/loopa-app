@@ -1,7 +1,7 @@
 /**
  * SVG Exporter — static (single-frame) and animated (SMIL) modes.
  */
-import type { Element, RectElement, PathElement } from '@/types/elements'
+import type { Element, RectElement, PathElement, GroupElement, ImageElement } from '@/types/elements'
 import type { Keyframe, AnimatableProps, EasingType } from '@/types/animation'
 import type { ExportPayload, SvgExportOptions } from '@/types/export'
 import type { BaseExporter } from './BaseExporter'
@@ -164,6 +164,8 @@ function buildAnimatedElement(
   loop: boolean
 ): string {
   if (!el.visible) return ''
+  if (el.type === 'video') return `<!-- video layer "${el.name}" exported as static placeholder --><rect x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" fill="#111"/>`
+  if (el.type === 'image') return serializeElement(el, {})  // image data URLs not available in animated path; renders placeholder
 
   const kfs = keyframes.filter(kf => kf.elementId === el.id)
 
@@ -289,6 +291,19 @@ function buildAnimatedElement(
 
 // ── Exporter ──────────────────────────────────────────────────────────────────
 
+async function loadImageDataUrls(elements: Element[]): Promise<Map<string, string>> {
+  const { getImageBlob, blobToDataUrl } = await import('@/lib/utils/videoStorage')
+  const map = new Map<string, string>()
+  const imageEls = elements.filter(el => el.type === 'image') as ImageElement[]
+  await Promise.all(imageEls.map(async el => {
+    try {
+      const blob = await getImageBlob(el.imageStorageId)
+      if (blob) map.set(el.imageStorageId, await blobToDataUrl(blob))
+    } catch { /* skip */ }
+  }))
+  return map
+}
+
 export const SvgExporter: BaseExporter = {
   async export(payload: ExportPayload): Promise<string> {
     const { elements, keyframes, artboard, fps, totalFrames, options } = payload
@@ -297,14 +312,20 @@ export const SvgExporter: BaseExporter = {
     if (!opts.animated) {
       // Static: serialize at current frame (frame 0 for export)
       const states = computeFrame(elements, keyframes, 0)
-      return serializeFrame(elements, states, artboard)
+      const imageDataUrls = await loadImageDataUrls(elements)
+      return serializeFrame(elements, states, artboard, undefined, imageDataUrls)
     }
 
     // Animated SVG with SMIL
     const dur = totalFrames / fps
     const loop = opts.loop
 
+    // Only animate top-level elements; group children are rendered by their group
+    const childIds = new Set(
+      elements.flatMap(el => el.type === 'group' ? (el as GroupElement).childIds : [])
+    )
     const animatedElements = elements
+      .filter(el => !childIds.has(el.id))
       .map(el => buildAnimatedElement(el, keyframes, totalFrames, fps, loop))
       .join('\n')
 

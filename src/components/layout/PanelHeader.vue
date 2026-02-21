@@ -11,8 +11,7 @@ defineProps<{ title: string }>()
 
 <style scoped>
 .header {
-  height: 2.125rem;
-  min-height: 2.125rem;
+  height: 2.375rem;
   display: flex;
   align-items: center;
   justify-content: space-between;

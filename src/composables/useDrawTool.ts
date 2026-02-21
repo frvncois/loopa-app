@@ -64,10 +64,11 @@ export function useDrawTool(
 
     const type = uiStore.currentTool as ElementType
     const minSize = 4
+    const frameId = uiStore.activeFrameId ?? ''
     if (drawPreview.width < minSize && drawPreview.height < minSize) {
       // Click without drag: use default size centered at click
       const el = createDefaultElement(type)
-      editorStore.addElement({ ...el, x: startSvg.x - 50, y: startSvg.y - 50 })
+      editorStore.addElement({ ...el, x: startSvg.x - 50, y: startSvg.y - 50 }, frameId)
       uiStore.select(el.id)
     } else {
       const el = createDefaultElement(type)
@@ -77,11 +78,9 @@ export function useDrawTool(
         y: drawPreview.y,
         width: drawPreview.width || 100,
         height: drawPreview.height || 100
-      })
+      }, frameId)
       uiStore.select(el.id)
     }
-
-    uiStore.setTool('select')
   }
 
   return { onCanvasDown, onCanvasMove, onCanvasUp, drawPreview, isDrawing }

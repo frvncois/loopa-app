@@ -37,7 +37,7 @@ defineProps<{
   justify-content: center;
   gap: 0.25rem;
   font-weight: 500;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   white-space: nowrap;
   transition: all var(--ease);
 }
@@ -49,7 +49,7 @@ defineProps<{
 .button.is-ghost:hover:not(:disabled) { background: var(--bg-4); border-color: transparent; }
 .button.is-accent { background: var(--accent); color: #fff; border-color: var(--accent); }
 .button.is-accent:hover:not(:disabled) { background: var(--accent-h); }
-.button.is-sm { height: 1.5rem; padding: 0 0.4375rem; font-size: 0.6875rem; }
+.button.is-sm { height: 1.5rem; padding: 0 0.4375rem; font-size: 0.75rem; }
 .button.is-sm.is-icon { width: 1.625rem; }
 .button.is-xs { height: 1.25rem; padding: 0 0.3125rem; font-size: 0.625rem; }
 .button.is-xs.is-icon { width: 1.375rem; }

@@ -6,9 +6,11 @@ import { useProjectsStore } from '@/stores/projectsStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useTimelineStore } from '@/stores/timelineStore'
 import { useCanvas } from '@/composables/useCanvas'
+import { useAnimatedEditing } from '@/composables/useAnimatedEditing'
 import { useSelection } from '@/composables/useSelection'
 import { useElementDrag } from '@/composables/useElementDrag'
 import { useElementResize } from '@/composables/useElementResize'
+import { useElementRotate } from '@/composables/useElementRotate'
 import { useDrawTool } from '@/composables/useDrawTool'
 import { useAnimation } from '@/composables/useAnimation'
 import { useKeyframes } from '@/composables/useKeyframes'
@@ -17,6 +19,10 @@ import { useClipboard } from '@/composables/useClipboard'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { usePenTool } from '@/composables/usePenTool'
 import { usePathEditor } from '@/composables/usePathEditor'
+import { useMasking } from '@/composables/useMasking'
+import { useCropTool } from '@/composables/useCropTool'
+import { useTransformOrigin } from '@/composables/useTransformOrigin'
+import { useFigmaSync } from '@/composables/useFigmaSync'
 import AppTopbar from '@/components/layout/AppTopbar.vue'
 import ResizablePanel from '@/components/layout/ResizablePanel.vue'
 import LayerPanel from '@/components/layers/LayerPanel.vue'
@@ -28,6 +34,9 @@ import ProjectSettingsModal from '@/components/modals/ProjectSettingsModal.vue'
 import ShortcutsModal from '@/components/modals/ShortcutsModal.vue'
 import ImportModal from '@/components/modals/ImportModal.vue'
 import ExportModal from '@/components/modals/ExportModal.vue'
+import FigmaSyncResultModal from '@/components/modals/FigmaSyncResultModal.vue'
+import AddVideoModal from '@/components/modals/AddVideoModal.vue'
+import AddImageModal from '@/components/modals/AddImageModal.vue'
 import ContextMenu from '@/components/ui/ContextMenu.vue'
 
 const props = defineProps<{ id: string }>()
@@ -41,30 +50,48 @@ const timeline = useTimelineStore()
 // ── Composables ──────────────────────────────────────────────
 const viewportEl = ref<HTMLElement | null>(null)
 const canvas = useCanvas(viewportEl)
-const selection = useSelection(editor, ui)
-const elementDrag = useElementDrag(editor, ui, canvas)
-const elementResize = useElementResize(editor, ui, canvas)
+const animatedEditing = useAnimatedEditing(editor, ui, timeline)
+const selection = useSelection(editor, ui, animatedEditing.getAnimatedElement)
+const history = useHistory(editor)
+const transformOriginComposable = useTransformOrigin(editor, ui, canvas, animatedEditing.getAnimatedElement, animatedEditing.setAnimatedProperty, history)
+const elementDrag = useElementDrag(editor, ui, canvas, animatedEditing.getAnimatedElement, animatedEditing.setAnimatedProperty, transformOriginComposable.isDraggingOrigin)
+const elementResize = useElementResize(editor, ui, canvas, animatedEditing.getAnimatedElement, animatedEditing.setAnimatedProperty, transformOriginComposable.isDraggingOrigin)
+const elementRotate = useElementRotate(editor, ui, canvas, animatedEditing.getAnimatedElement, animatedEditing.setAnimatedProperty, transformOriginComposable.isDraggingOrigin)
 const drawTool = useDrawTool(editor, ui, canvas)
 const animation = useAnimation(editor, timeline)
 const keyframeOps = useKeyframes(editor, ui, timeline)
-const history = useHistory(editor)
 const clipboard = useClipboard(editor, ui)
-const shortcuts = useShortcuts(editor, ui, timeline, history, clipboard, selection, canvas)
+
+// Mask + Crop (must be before shortcuts)
+const masking = useMasking()
+const cropTool = useCropTool(editor, ui, canvas)
+
+const shortcuts = useShortcuts(editor, ui, timeline, history, clipboard, selection, canvas, cropTool)
 
 // Path system
 const penTool = usePenTool(editor, ui, canvas, () => history.save())
 const pathEditor = usePathEditor(editor, ui, canvas, () => history.save())
 
+// Figma sync
+const figmaSync = useFigmaSync()
+
 provide('animation', animation)
 provide('keyframeOps', keyframeOps)
 provide('pathEditor', pathEditor)
+provide('getAnimatedElement', animatedEditing.getAnimatedElement)
+provide('setAnimatedProperty', animatedEditing.setAnimatedProperty)
+provide('cropTool', cropTool)
 
 // ── Template refs ─────────────────────────────────────────────
 const canvasVpRef = ref<InstanceType<typeof CanvasViewport> | null>(null)
 
-// ── Project meta ──────────────────────────────────────────────
+// ── Project meta & active frame ───────────────────────────────
 const meta = computed(() =>
   projects.projects.find(p => p.id === editor.projectId) ?? null
+)
+
+const activeFrame = computed(() =>
+  ui.activeFrameId ? editor.frames.find(f => f.id === ui.activeFrameId) ?? null : null
 )
 
 // ── History auto-wiring via $onAction ─────────────────────────
@@ -73,11 +100,11 @@ let unsubscribeActions: (() => void) | null = null
 function wireHistory() {
   unsubscribeActions = editor.$onAction(({ name, after }) => {
     after(() => {
-      if (name === 'updateElement') {
+      if (name === 'updateElement' || name === 'updateKeyframe') {
         history.saveDebounced()
       } else if (['addElement', 'deleteElements', 'reorderElement',
                   'addKeyframe', 'deleteKeyframe', 'deleteKeyframesForElement',
-                  'duplicateElements'].includes(name)) {
+                  'duplicateElements', 'groupElements', 'ungroupElements'].includes(name)) {
         history.save()
       }
     })
@@ -109,13 +136,24 @@ onMounted(() => {
     return
   }
   editor.loadProject(data)
-  timeline.setFps(data.fps)
-  timeline.setTotalFrames(data.totalFrames)
+
+  // Activate the first frame and sync timeline
+  const firstFrame = [...editor.frames].sort((a, b) => a.order - b.order)[0]
+  if (firstFrame) {
+    ui.setActiveFrame(firstFrame.id)
+    timeline.syncFromFrame(firstFrame)
+  } else {
+    // Legacy fallback (should never happen after migration in loadProject)
+    if (data.fps != null) timeline.setFps(data.fps)
+    if (data.totalFrames != null) timeline.setTotalFrames(data.totalFrames)
+  }
 
   viewportEl.value = canvasVpRef.value?.viewportEl ?? null
 
   setTimeout(() => {
-    canvas.fitToView(data.meta.artboardWidth, data.meta.artboardHeight)
+    const w = activeFrame.value?.width ?? data.meta.artboardWidth ?? 800
+    const h = activeFrame.value?.height ?? data.meta.artboardHeight ?? 600
+    canvas.fitToView(w, h)
   }, 50)
 
   history.seed()
@@ -124,6 +162,13 @@ onMounted(() => {
 
   window.addEventListener('loopa:addKeyframe', onAddKeyframe as EventListener)
   window.addEventListener('loopa:deletePathPoint', onDeletePathPoint as EventListener)
+})
+
+// Sync timeline when active frame changes
+watch(() => ui.activeFrameId, (frameId) => {
+  if (!frameId) return
+  const frame = editor.frames.find(f => f.id === frameId)
+  if (frame) timeline.syncFromFrame(frame)
 })
 
 function onAddKeyframe() {
@@ -140,7 +185,7 @@ let savedTimer: ReturnType<typeof setTimeout> | null = null
 const saveState = ref<'idle' | 'saving' | 'saved'>('idle')
 
 watch(
-  [() => editor.elements, () => editor.keyframes],
+  [() => editor.elements, () => editor.keyframes, () => editor.frames],
   () => {
     if (!editor.projectId) return
     if (saveTimer) clearTimeout(saveTimer)
@@ -154,12 +199,17 @@ function save() {
   if (!editor.projectId) return
   const existing = projects.loadProjectData(editor.projectId)
   if (!existing) return
+  // Keep meta artboard dims in sync with first frame
+  const firstFrame = editor.frames.find(f => f.order === 0)
+  const updatedMeta = firstFrame
+    ? { ...existing.meta, artboardWidth: firstFrame.width, artboardHeight: firstFrame.height }
+    : existing.meta
   projects.saveProjectData(editor.projectId, {
     ...existing,
+    meta: updatedMeta,
+    frames: editor.frames,
     elements: editor.elements,
     keyframes: editor.keyframes,
-    fps: timeline.fps,
-    totalFrames: timeline.totalFrames,
   })
   saveState.value = 'saved'
   if (savedTimer) clearTimeout(savedTimer)
@@ -193,6 +243,83 @@ const contextItems = computed(() => {
   }[] = []
 
   if (ui.selectedIds.size > 0) {
+    // Group / Ungroup
+    if (ui.selectedIds.size >= 2) {
+      items.push({
+        label: 'Group Selection',
+        shortcut: '⌘G',
+        action: () => {
+          const groupId = editor.groupElements([...ui.selectedIds])
+          if (groupId) { ui.select(groupId); history.save() }
+        }
+      })
+
+      // Create mask: first selected element becomes the mask
+      const selArr = [...ui.selectedIds]
+      const potentialMask = editor.elements.find(e => e.id === selArr[0])
+      if (potentialMask && !potentialMask.isMask) {
+        items.push({
+          label: 'Create Mask',
+          shortcut: '⌘⇧M',
+          action: () => {
+            masking.createMask(selArr[0], selArr.slice(1))
+            history.save()
+          }
+        })
+      }
+    }
+    if (ui.selectedIds.size === 1) {
+      const selId = [...ui.selectedIds][0]
+      const selEl = editor.elements.find(e => e.id === selId)
+      if (selEl?.type === 'group') {
+        items.push({
+          label: 'Ungroup',
+          shortcut: '⌘⇧G',
+          action: () => {
+            const childIds = editor.ungroupElements(selId)
+            ui.selectAll(childIds)
+            history.save()
+          }
+        })
+      }
+      // Mask release / remove
+      if (selEl?.isMask) {
+        items.push({
+          label: 'Release Mask',
+          shortcut: '⌘⌥M',
+          action: () => {
+            masking.releaseMask(selId)
+            history.save()
+          }
+        })
+      }
+      if (selEl?.maskedById) {
+        items.push({
+          label: 'Remove from Mask',
+          action: () => {
+            masking.removeFromMask(selId)
+            history.save()
+          }
+        })
+      }
+      // Crop
+      if (selEl && selEl.type !== 'group' && selEl.type !== 'video') {
+        items.push({
+          label: 'Edit Crop',
+          action: () => cropTool.enterCropMode(selId)
+        })
+        if (selEl.cropRect) {
+          items.push({
+            label: 'Reset Crop',
+            action: () => {
+              cropTool.resetCrop(selId)
+              history.save()
+            }
+          })
+        }
+      }
+    }
+
     items.push({
       label: `Duplicate${ui.selectedIds.size > 1 ? ` (${ui.selectedIds.size})` : ''}`,
       shortcut: '⌘D',
@@ -276,14 +403,18 @@ const contextItems = computed(() => {
     <!-- Topbar -->
     <AppTopbar
       :project-name="meta?.name"
-      :artboard-width="meta?.artboardWidth"
-      :artboard-height="meta?.artboardHeight"
+      :active-frame-name="activeFrame?.name"
+      :artboard-width="activeFrame?.width ?? meta?.artboardWidth"
+      :artboard-height="activeFrame?.height ?? meta?.artboardHeight"
       :can-undo="history.canUndo.value"
       :can-redo="history.canRedo.value"
       :save-state="saveState"
+      :has-figma-sync="!!(activeFrame?.figmaFileKey)"
+      :is-syncing="figmaSync.isSyncing.value"
       @update:project-name="n => projects.updateProjectMeta(props.id, { name: n })"
       @undo="history.undo()"
       @redo="history.redo()"
+      @sync="figmaSync.syncActiveFrame()"
     />
 
     <!-- Main area -->
@@ -302,11 +433,14 @@ const contextItems = computed(() => {
           :draw-tool="drawTool"
           :element-drag="elementDrag"
           :element-resize="elementResize"
+          :element-rotate="elementRotate"
           :selection="selection"
           :pen-tool="penTool"
           :path-editor="pathEditor"
-          :artboard-width="meta?.artboardWidth ?? 800"
-          :artboard-height="meta?.artboardHeight ?? 600"
+          :crop-tool="cropTool"
+          :transform-origin-composable="transformOriginComposable"
+          :artboard-width="activeFrame?.width ?? meta?.artboardWidth ?? 800"
+          :artboard-height="activeFrame?.height ?? meta?.artboardHeight ?? 600"
         />
         <!-- Timeline -->
         <ResizablePanel side="bottom" :min="100" :max="400" :default-size="180">
@@ -331,11 +465,26 @@ const contextItems = computed(() => {
     />
     <ExportModal
       :open="ui.activeModal === 'export'"
-      :artboard-width="meta?.artboardWidth ?? 800"
-      :artboard-height="meta?.artboardHeight ?? 600"
+      :artboard-width="activeFrame?.width ?? meta?.artboardWidth ?? 800"
+      :artboard-height="activeFrame?.height ?? meta?.artboardHeight ?? 600"
       @close="ui.closeModal()"
     />
     <ShortcutsModal />
+    <AddVideoModal
+      :open="ui.activeModal === 'video'"
+      @close="ui.closeModal()"
+    />
+    <AddImageModal
+      :open="ui.activeModal === 'image'"
+      @close="ui.closeModal()"
+    />
+    <FigmaSyncResultModal
+      :open="!!figmaSync.syncResult.value"
+      :result="figmaSync.syncResult.value"
+      :keep-decisions="figmaSync.keepDecisions.value"
+      @done="figmaSync.applyRemovedDecisions()"
+      @close="figmaSync.dismissSync()"
+    />
 
     <!-- Context menu -->
     <ContextMenu

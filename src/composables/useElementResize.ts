@@ -13,7 +13,7 @@ type Canvas = ReturnType<typeof useCanvas>
 
 export function useElementResize(
   editorStore: EditorStore,
-  _uiStore: UiStore,
+  uiStore: UiStore,
   canvas: Canvas,
   getAnimatedEl?: (id: string) => Element | null,
   setAnimatedProp?: (id: string, props: Partial<AnimatableProps>) => void,
@@ -25,13 +25,18 @@ export function useElementResize(
   let startEl = { x: 0, y: 0, width: 0, height: 0, rotation: 0 }
   let targetId = ''
 
-  function onResizeStart(e: MouseEvent, h: string, id: string) {
+  // For mask group resize: content siblings scaled proportionally with the mask shape
+  type SiblingState = { id: string; x: number; y: number; width: number; height: number }
+  let proportionalSiblings: SiblingState[] = []
+
+  function onResizeStart(e: MouseEvent, h: string, id: string, siblingIds?: string[]) {
     if (isDraggingOrigin?.value) return
     e.stopPropagation()
     e.preventDefault()
     handle = h
     targetId = id
     isResizing.value = true
+    uiStore.setTransforming(true)
     startSvg = canvas.screenToSvg(e.clientX, e.clientY)
 
     const el = getAnimatedEl ? getAnimatedEl(id) : editorStore.getElementById(id)
@@ -40,6 +45,15 @@ export function useElementResize(
         x: el.x, y: el.y,
         width: el.width, height: el.height,
         rotation: el.rotation ?? 0,
+      }
+    }
+
+    // Capture start states of proportional siblings (mask group content elements)
+    proportionalSiblings = []
+    if (siblingIds?.length) {
+      for (const sid of siblingIds) {
+        const sib = getAnimatedEl ? getAnimatedEl(sid) : editorStore.getElementById(sid)
+        if (sib) proportionalSiblings.push({ id: sid, x: sib.x, y: sib.y, width: sib.width, height: sib.height })
       }
     }
 
@@ -69,10 +83,33 @@ export function useElementResize(
     } else {
       editorStore.updateElement(targetId, { x, y, width, height })
     }
+
+    // Proportional scaling for mask group content siblings.
+    // Anchor = the corner/edge opposite to the dragged handle (stays fixed).
+    if (proportionalSiblings.length > 0 && startEl.width > 0 && startEl.height > 0) {
+      const sx = width / startEl.width
+      const sy = height / startEl.height
+      const anchorX = handle.includes('w') ? startEl.x + startEl.width : startEl.x
+      const anchorY = handle.includes('n') ? startEl.y + startEl.height : startEl.y
+
+      for (const sib of proportionalSiblings) {
+        const newX = anchorX + (sib.x - anchorX) * sx
+        const newY = anchorY + (sib.y - anchorY) * sy
+        const newW = Math.max(1, sib.width * sx)
+        const newH = Math.max(1, sib.height * sy)
+        if (setAnimatedProp) {
+          setAnimatedProp(sib.id, { x: newX, y: newY, width: newW, height: newH })
+        } else {
+          editorStore.updateElement(sib.id, { x: newX, y: newY, width: newW, height: newH })
+        }
+      }
+    }
   }
 
   function onUp() {
     isResizing.value = false
+    uiStore.setTransforming(false)
+    proportionalSiblings = []
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
   }

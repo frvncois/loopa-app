@@ -130,8 +130,10 @@ function buildRotationAnim(
   const dur = totalFrames / fps
   const allFrames = [...new Set([0, ...sorted.map(k => k.frame), totalFrames])].sort((a, b) => a - b)
 
-  const cx = el.x + el.width / 2
-  const cy = el.y + el.height / 2
+  const oxN = (el as any).transformOrigin?.x ?? 0.5
+  const oyN = (el as any).transformOrigin?.y ?? 0.5
+  const cx = el.x + oxN * el.width
+  const cy = el.y + oyN * el.height
 
   const values: string[] = []
   const keyTimes: string[] = []

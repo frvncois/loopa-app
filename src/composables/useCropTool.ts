@@ -57,6 +57,7 @@ export function useCropTool(
     const elBase = editorStore.getElementById(cropElementId.value)
     if (!elBase) return
 
+    uiStore.setTransforming(true)
     const startSvg = canvas.screenToSvg(e.clientX, e.clientY)
     const startCrop = { ...tempCropRect.value }
     const MIN = 10
@@ -94,6 +95,7 @@ export function useCropTool(
     function onUp() {
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
+      uiStore.setTransforming(false)
     }
 
     document.addEventListener('mousemove', onMove)
@@ -109,6 +111,7 @@ export function useCropTool(
     const elBase = editorStore.getElementById(cropElementId.value)
     if (!elBase) return
 
+    uiStore.setTransforming(true)
     const startSvg = canvas.screenToSvg(e.clientX, e.clientY)
     const startCrop = { ...tempCropRect.value }
 
@@ -131,6 +134,7 @@ export function useCropTool(
     function onUp() {
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
+      uiStore.setTransforming(false)
     }
 
     document.addEventListener('mousemove', onMove)

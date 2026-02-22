@@ -19,6 +19,8 @@ const props = defineProps<{
   dragOver?: boolean
   expanded?: boolean
   depth?: number
+  isMaskGroup?: boolean
+  isMaskShape?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -67,13 +69,20 @@ const ICONS: Record<string, Component> = {
     </button>
 
     <div class="icon">
-      <!-- Folder icon for groups -->
-      <svg v-if="element.type === 'group'" viewBox="0 0 12 12" width="10" height="10" fill="none">
+      <!-- Mask group icon -->
+      <svg v-if="isMaskGroup" viewBox="0 0 12 12" width="10" height="10" fill="none">
+        <rect x="1.5" y="1.5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1" stroke-dasharray="2.5 1.5"/>
+        <rect x="4" y="4" width="4" height="4" rx="0.5" fill="currentColor" opacity="0.5"/>
+      </svg>
+      <!-- Regular folder icon for groups -->
+      <svg v-else-if="element.type === 'group'" viewBox="0 0 12 12" width="10" height="10" fill="none">
         <path d="M1 3.5C1 2.948 1.448 2.5 2 2.5h2.5l1 1H10c.552 0 1 .448 1 1V9c0 .552-.448 1-1 1H2c-.552 0-1-.448-1-1V3.5z" stroke="currentColor" stroke-width="1" fill="none"/>
       </svg>
       <component v-else :is="ICONS[element.type] ?? ICONS.rect" />
     </div>
     <span class="name">{{ element.name }}</span>
+    <!-- Mask shape indicator -->
+    <div v-if="isMaskShape" class="indicator is-mask" title="Mask shape" />
 
     <!-- Visibility toggle -->
     <button
@@ -165,5 +174,6 @@ const ICONS: Record<string, Component> = {
   height: 0.3125rem;
   border-radius: 50%;
   &.is-animated { background: var(--accent); }
+  &.is-mask { background: var(--accent); opacity: 0.6; }
 }
 </style>

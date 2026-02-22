@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, inject } from 'vue'
+import { computed } from 'vue'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useMasking } from '@/composables/useMasking'
-import type { useCropTool } from '@/composables/useCropTool'
+import type { GroupElement } from '@/types/elements'
 
 const editor = useEditorStore()
 const ui = useUiStore()
@@ -14,58 +14,51 @@ const el = computed(() => {
   return editor.getElementById([...ui.selectedIds][0]) ?? null
 })
 
-const isMask = computed(() => el.value?.isMask === true)
-const maskedById = computed(() => el.value?.maskedById ?? null)
+// Is the selected element a mask group?
+const isMaskGroup = computed(() =>
+  el.value?.type === 'group' && (el.value as GroupElement).hasMask === true
+)
 
-const maskedElements = computed(() => {
-  if (!isMask.value || !el.value) return []
-  return (el.value.maskedElementIds ?? [])
-    .map(id => editor.getElementById(id))
-    .filter(Boolean) as ReturnType<typeof editor.getElementById>[]
+// Is the selected element the mask shape (first child of a mask group)?
+const isMaskShape = computed(() => {
+  if (!el.value) return false
+  return editor.elements.some(
+    g => g.type === 'group' && (g as GroupElement).hasMask && (g as GroupElement).childIds[0] === el.value!.id
+  )
 })
 
-const maskSource = computed(() => {
-  if (!maskedById.value) return null
-  return editor.getElementById(maskedById.value) ?? null
+// Number of clipped children (all children except the mask shape)
+const clippedCount = computed(() => {
+  if (!isMaskGroup.value || !el.value) return 0
+  return Math.max(0, (el.value as GroupElement).childIds.length - 1)
 })
 
 function releaseMask() {
-  if (!el.value || !isMask.value) return
+  if (!el.value) return
   masking.releaseMask(el.value.id)
-}
-
-function removeFromMask() {
-  if (!el.value || !maskedById.value) return
-  masking.removeFromMask(el.value.id)
 }
 </script>
 
 <template>
-  <div v-if="el && (isMask || maskedById)" class="section">
-    <!-- Mask source element -->
-    <template v-if="isMask">
-      <div class="title">Mask</div>
+  <div v-if="isMaskGroup || isMaskShape" class="section">
+    <!-- Mask group selected -->
+    <template v-if="isMaskGroup">
+      <div class="title">Mask Group</div>
       <div class="row">
-        <span class="label">Masking</span>
-        <span class="value">{{ maskedElements.length }} element{{ maskedElements.length !== 1 ? 's' : '' }}</span>
-      </div>
-      <div v-for="masked in maskedElements" :key="masked?.id" class="row">
-        <span class="name">{{ masked?.name }}</span>
+        <span class="label">Clips</span>
+        <span class="value">{{ clippedCount }} layer{{ clippedCount !== 1 ? 's' : '' }}</span>
       </div>
       <div class="row">
         <button class="action-btn" @click="releaseMask">Release Mask</button>
       </div>
     </template>
 
-    <!-- Masked element -->
-    <template v-else-if="maskedById">
-      <div class="title">Masked By</div>
+    <!-- Mask shape (first child of mask group) -->
+    <template v-else-if="isMaskShape">
+      <div class="title">Mask Shape</div>
       <div class="row">
-        <span class="label">Mask</span>
-        <span class="value">{{ maskSource?.name ?? '—' }}</span>
-      </div>
-      <div class="row">
-        <button class="action-btn" @click="removeFromMask">Remove from Mask</button>
+        <span class="label">Role</span>
+        <span class="value">Clipping shape</span>
       </div>
     </template>
   </div>
@@ -98,11 +91,6 @@ function removeFromMask() {
   font-size: 0.6875rem;
   color: var(--text-1);
   font-family: var(--mono);
-}
-.name {
-  font-size: 0.6875rem;
-  color: var(--text-2);
-  padding-left: 4.5rem;
 }
 .action-btn {
   flex: 1;

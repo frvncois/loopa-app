@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import { inject } from 'vue'
 import { useTimelineStore } from '@/stores/timelineStore'
 import type { PlaybackDirection } from '@/types/animation'
+import type { useHistory } from '@/composables/useHistory'
 import BaseToggle from '@/components/ui/BaseToggle.vue'
 
 const timeline = useTimelineStore()
+const history = inject<ReturnType<typeof useHistory>>('history')
 
 const directionOptions: { value: PlaybackDirection; label: string }[] = [
   { value: 'normal', label: 'Normal' },
@@ -16,12 +19,26 @@ function onDurationChange(val: string) {
   const sec = parseFloat(val)
   if (!isNaN(sec) && sec > 0) {
     timeline.setTotalFrames(Math.round(sec * timeline.fps))
+    history?.save()
   }
 }
 
 function onFpsChange(val: string) {
   const fps = parseInt(val)
-  if (!isNaN(fps) && fps > 0) timeline.setFps(fps)
+  if (!isNaN(fps) && fps > 0) {
+    timeline.setFps(fps)
+    history?.save()
+  }
+}
+
+function onDirectionChange(val: PlaybackDirection) {
+  timeline.setDirection(val)
+  history?.save()
+}
+
+function onLoopChange(val: boolean) {
+  timeline.setLoop(val)
+  history?.save()
 }
 </script>
 
@@ -52,23 +69,12 @@ function onFpsChange(val: string) {
       />
       <span class="unit">fps</span>
     </div>
-    <div class="row">
-      <span class="label">Direction</span>
-      <select
-        class="select"
-        :value="timeline.direction"
-        @change="timeline.setDirection(($event.target as HTMLSelectElement).value as PlaybackDirection)"
-      >
-        <option v-for="opt in directionOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-      </select>
-    </div>
-    <BaseToggle :model-value="timeline.loop" label="Loop animation" @update:model-value="timeline.setLoop" />
   </div>
 </template>
 
 <style scoped>
 .section { padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border); }
-.title { font-size: 0.75rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.5rem; }
+.title { font-size: 0.575rem; font-weight: 600; text-transform: uppercase; color: var(--text-2); margin-bottom: 0.5rem; letter-spacing: 0.07em;}
 .row {
   display: flex; align-items: center; gap: 0.375rem; margin-bottom: 0.375rem; min-height: 1.625rem;
   &:last-child { margin-bottom: 0; }

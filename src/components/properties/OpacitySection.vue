@@ -1,20 +1,50 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUiStore } from '@/stores/uiStore'
-import IconBlend from '@/components/icons/IconBlend.vue'
+import type { AnimatableProps } from '@/types/animation'
+import type { Element } from '@/types/elements'
 
 const editor = useEditorStore()
 const ui = useUiStore()
 
+const getAnimatedEl = inject<(id: string) => Element | null>(
+  'getAnimatedElement',
+  (id) => editor.getElementById(id) ?? null
+)
+const setAnimatedProp = inject<(id: string, props: Partial<AnimatableProps>) => void>(
+  'setAnimatedProperty',
+  (id, props) => editor.updateElement(id, props)
+)
+
 const el = computed(() => {
   if (ui.selectedIds.size !== 1) return null
-  return editor.getElementById([...ui.selectedIds][0]) ?? null
+  return getAnimatedEl([...ui.selectedIds][0])
 })
+
+const blendModes = [
+  { value: 'normal', label: 'Normal' },
+  { value: 'multiply', label: 'Multiply' },
+  { value: 'screen', label: 'Screen' },
+  { value: 'overlay', label: 'Overlay' },
+  { value: 'darken', label: 'Darken' },
+  { value: 'lighten', label: 'Lighten' },
+  { value: 'color-dodge', label: 'Color Dodge' },
+  { value: 'color-burn', label: 'Color Burn' },
+  { value: 'hard-light', label: 'Hard Light' },
+  { value: 'soft-light', label: 'Soft Light' },
+  { value: 'difference', label: 'Difference' },
+  { value: 'exclusion', label: 'Exclusion' },
+]
 
 function updateOpacity(val: string) {
   const num = Math.min(100, Math.max(0, parseFloat(val)))
-  if (!isNaN(num)) editor.updateElement([...ui.selectedIds][0], { opacity: num / 100 })
+  if (!isNaN(num)) setAnimatedProp([...ui.selectedIds][0], { opacity: num / 100 })
+}
+
+function updateBlendMode(val: string) {
+  if (!el.value) return
+  editor.updateElement(el.value.id, { blendMode: val })
 }
 </script>
 
@@ -30,9 +60,13 @@ function updateOpacity(val: string) {
         style="width:3.5rem;min-width:3.5rem;flex:none"
         @change="updateOpacity(($event.target as HTMLInputElement).value)"
       />
-      <button class="blend" title="Blend mode">
-        <IconBlend />
-      </button>
+      <select
+        class="blend-select"
+        :value="el.blendMode ?? 'normal'"
+        @change="updateBlendMode(($event.target as HTMLSelectElement).value)"
+      >
+        <option v-for="m in blendModes" :key="m.value" :value="m.value">{{ m.label }}</option>
+      </select>
     </div>
   </div>
 </template>
@@ -61,18 +95,22 @@ function updateOpacity(val: string) {
   transition: border-color var(--ease);
   &:focus { border-color: var(--accent); }
 }
-.blend {
-  width: 1.75rem;
+.blend-select {
+  flex: 1;
   height: 1.625rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background: var(--bg-3);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  color: var(--text-3);
+  color: var(--text-1);
+  padding: 0 0.25rem;
+  font-size: 0.75rem;
+  outline: none;
   cursor: pointer;
-  transition: all var(--ease);
-  &:hover { background: var(--bg-5); color: var(--text-1); }
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236a6a7e' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.25rem center;
+  padding-right: 1.25rem;
+  min-width: 0;
 }
 </style>

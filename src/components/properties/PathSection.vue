@@ -4,6 +4,7 @@ import { useEditorStore } from '@/stores/editorStore'
 import { useUiStore } from '@/stores/uiStore'
 import type { PathElement } from '@/types/elements'
 import type { usePathEditor } from '@/composables/usePathEditor'
+import { pathPointsToD } from '@/lib/path/PathBuilder'
 import BaseToggle from '@/components/ui/BaseToggle.vue'
 
 const editor = useEditorStore()
@@ -23,10 +24,7 @@ function toggleClosed() {
   const el = selectedEl.value
   const closed = !el.closed
   editor.updateElement(el.id, { closed } as any)
-  // Recompute d
-  import('@/lib/path/PathBuilder').then(({ pathPointsToD }) => {
-    editor.updateElement(el.id, { d: pathPointsToD(el.points, closed) } as any)
-  })
+  editor.updateElement(el.id, { d: pathPointsToD(el.points, closed) } as any)
 }
 
 function setFillRule(val: string) {
@@ -63,65 +61,60 @@ function setPtType(val: string) {
 </script>
 
 <template>
-  <div v-if="selectedEl" class="insp-section">
-    <div class="insp-title">Path</div>
+  <div v-if="selectedEl" class="section">
+    <div class="title">Path</div>
 
-    <!-- Meta row -->
-    <div class="insp-row">
-      <span class="insp-label">Points</span>
+    <div class="row">
+      <span class="label">Points</span>
       <span class="meta-val">{{ selectedEl.points.length }}</span>
     </div>
 
-    <!-- Closed toggle -->
     <BaseToggle :model-value="selectedEl.closed" label="Closed" @update:model-value="toggleClosed" />
 
-    <!-- Fill rule -->
-    <div class="insp-row">
-      <span class="insp-label">Fill rule</span>
-      <select class="insp-select" :value="selectedEl.fillRule" @change="e => setFillRule((e.target as HTMLSelectElement).value)">
+    <div class="row">
+      <span class="label">Fill rule</span>
+      <select class="select" :value="selectedEl.fillRule" @change="e => setFillRule((e.target as HTMLSelectElement).value)">
         <option value="nonzero">Nonzero</option>
         <option value="evenodd">Even-odd</option>
       </select>
     </div>
 
-    <!-- Edit mode toggle -->
-    <div class="insp-row" style="margin-top: 4px">
+    <div class="row" style="margin-top: 0.25rem">
       <button v-if="!ui.pathEditMode" class="edit-btn" @click="enterEditMode">Enter Edit Mode</button>
       <button v-else class="edit-btn is-active" @click="exitEditMode">Exit Edit Mode</button>
     </div>
 
-    <!-- Selected point details (only in edit mode with a point selected) -->
     <template v-if="ui.pathEditMode && selectedPt && pathEditor">
       <div class="pt-divider" />
-      <div class="insp-title">Point</div>
+      <div class="title">Point</div>
 
-      <div class="insp-row">
-        <span class="insp-label">X</span>
+      <div class="row">
+        <span class="label">X</span>
         <input
-          class="insp-input"
+          class="field is-pair"
           type="number"
           :value="Math.round(selectedPt.x)"
           @change="e => updatePtX(+(e.target as HTMLInputElement).value)"
         />
-        <span class="insp-label" style="padding-left: 6px">Y</span>
+        <span class="label" style="padding-left: 0.375rem">Y</span>
         <input
-          class="insp-input"
+          class="field is-pair"
           type="number"
           :value="Math.round(selectedPt.y)"
           @change="e => updatePtY(+(e.target as HTMLInputElement).value)"
         />
       </div>
 
-      <div class="insp-row">
-        <span class="insp-label">Type</span>
-        <select class="insp-select" :value="selectedPt.type" @change="e => setPtType((e.target as HTMLSelectElement).value)">
+      <div class="row">
+        <span class="label">Type</span>
+        <select class="select" :value="selectedPt.type" @change="e => setPtType((e.target as HTMLSelectElement).value)">
           <option value="corner">Corner</option>
           <option value="smooth">Smooth</option>
           <option value="symmetric">Symmetric</option>
         </select>
       </div>
 
-      <div class="insp-row" style="margin-top: 4px">
+      <div class="row" style="margin-top: 0.25rem">
         <button class="edit-btn is-danger" @click="pathEditor.deleteSelectedPoint()">Delete Point</button>
       </div>
     </template>
@@ -129,64 +122,59 @@ function setPtType(val: string) {
 </template>
 
 <style scoped>
-.insp-section {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-}
-.insp-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-2);
-  margin-bottom: 6px;
-}
-.insp-row {
+.section { padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border); }
+.title { font-size: 0.6875rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.375rem; }
+.row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  min-height: 22px;
-  margin-bottom: 2px;
+  gap: 0.25rem;
+  min-height: 1.375rem;
+  margin-bottom: 0.125rem;
 }
-.insp-label {
-  font-size: 11px;
+.label {
+  font-size: 0.6875rem;
   color: var(--text-3);
-  width: 56px;
+  width: 3.5rem;
   flex-shrink: 0;
 }
 .meta-val {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-2);
   font-family: var(--mono);
 }
-.insp-input {
-  width: 56px;
-  height: 22px;
+.field {
+  height: 1.375rem;
   background: var(--bg-3);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   color: var(--text-1);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-family: var(--mono);
-  padding: 0 4px;
-  text-align: right;
+  padding: 0 0.25rem;
+  outline: none;
+  transition: border-color var(--ease);
+  &:focus { border-color: var(--accent); }
+  &.is-pair { width: 3.5rem; flex: none; }
 }
-.insp-select {
-  height: 22px;
+.select {
+  height: 1.375rem;
   background: var(--bg-3);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   color: var(--text-1);
-  font-size: 11px;
-  padding: 0 4px;
+  font-size: 0.6875rem;
+  padding: 0 0.25rem;
   flex: 1;
+  outline: none;
 }
 .edit-btn {
-  height: 22px;
-  padding: 0 10px;
+  height: 1.375rem;
+  padding: 0 0.625rem;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--bg-3);
   color: var(--text-2);
-  font-size: 11px;
+  font-size: 0.6875rem;
   cursor: pointer;
   transition: all var(--ease);
   &:hover { background: var(--bg-5); color: var(--text-1); }
@@ -197,6 +185,6 @@ function setPtType(val: string) {
 .pt-divider {
   height: 1px;
   background: var(--border);
-  margin: 8px 0;
+  margin: 0.5rem 0;
 }
 </style>

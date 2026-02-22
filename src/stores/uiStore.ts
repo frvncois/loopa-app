@@ -36,6 +36,7 @@ export const useUiStore = defineStore('ui', () => {
   const snapToGrid = ref(false)
   const gridSize = ref(10)
 
+  const isTransforming = ref(false)
   const activeFrameId = ref<string | null>(null)
   const activeModal = ref<string | null>(null)
   const contextMenu = reactive({ show: false, x: 0, y: 0 })
@@ -143,15 +144,18 @@ export const useUiStore = defineStore('ui', () => {
 
   function hideContextMenu(): void { contextMenu.show = false }
 
+  function setTransforming(v: boolean): void { isTransforming.value = v }
+
   return {
     currentTool, selectedIds, selectedKeyframeIds, activePanel,
     panelWidths, showGrid, snapToGrid, gridSize,
-    activeFrameId,
+    isTransforming, activeFrameId,
     activeModal, contextMenu, pathEditMode, editingPathId, activeGroupId,
     setTool, select, addToSelection, toggleSelection, clearSelection, selectAll,
     selectKeyframe, selectKeyframes, clearKeyframeSelection,
     setActivePanel, openModal, closeModal, setPanelWidth,
     toggleGrid, toggleSnap, enterPathEditMode, exitPathEditMode,
-    setActiveFrame, enterGroup, exitGroup, showContextMenu, hideContextMenu
+    setActiveFrame, enterGroup, exitGroup, showContextMenu, hideContextMenu,
+    setTransforming
   }
 })

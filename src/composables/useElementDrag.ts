@@ -37,12 +37,45 @@ export function useElementDrag(
     isDragging.value = false
     startSvg = canvas.screenToSvg(e.clientX, e.clientY)
 
-    startPositions = new Map()
-    for (const selId of uiStore.selectedIds) {
-      const el = getAnimatedEl ? getAnimatedEl(selId) : editorStore.getElementById(selId)
-      if (el) startPositions.set(selId, { x: el.x, y: el.y })
+    if (e.altKey) {
+      // Alt+drag: duplicate selected elements and drag the copies.
+      // Originals stay in place; duplicates appear at the same position and follow the cursor.
+      const originalIds = [...uiStore.selectedIds]
+
+      // Capture original positions before duplicating
+      const origPositions = new Map<string, { x: number; y: number }>()
+      for (const selId of originalIds) {
+        const el = getAnimatedEl ? getAnimatedEl(selId) : editorStore.getElementById(selId)
+        if (el) origPositions.set(selId, { x: el.x, y: el.y })
+      }
+
+      // Duplicate all selected elements (returns new IDs in same order)
+      const newIds = editorStore.duplicateElements(originalIds)
+
+      // Reset duplicates to original positions (duplicateElements applies a +20 offset by default)
+      // and build startPositions for the drag using the new IDs.
+      startPositions = new Map()
+      for (let i = 0; i < originalIds.length; i++) {
+        const newId = newIds[i]
+        const origPos = origPositions.get(originalIds[i])
+        if (!newId || !origPos) continue
+        // Move duplicate back to exact original position (also propagates to group children)
+        editorStore.updateElement(newId, { x: origPos.x, y: origPos.y })
+        startPositions.set(newId, { x: origPos.x, y: origPos.y })
+      }
+
+      // Select the duplicates, originals become deselected
+      uiStore.selectAll(newIds.filter(Boolean))
+    } else {
+      // Normal drag: track start positions of all selected elements
+      startPositions = new Map()
+      for (const selId of uiStore.selectedIds) {
+        const el = getAnimatedEl ? getAnimatedEl(selId) : editorStore.getElementById(selId)
+        if (el) startPositions.set(selId, { x: el.x, y: el.y })
+      }
     }
 
+    uiStore.setTransforming(true)
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
     return effectiveId
@@ -72,6 +105,7 @@ export function useElementDrag(
   function onUp() {
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
+    uiStore.setTransforming(false)
     setTimeout(() => { isDragging.value = false }, 10)
   }
 

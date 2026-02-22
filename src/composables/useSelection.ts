@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 import type { useEditorStore } from '@/stores/editorStore'
 import type { useUiStore } from '@/stores/uiStore'
-import type { Element } from '@/types/elements'
+import type { Element, GroupElement } from '@/types/elements'
 import { getMultiBounds } from '@/lib/elements/ElementBounds'
 
 type EditorStore = ReturnType<typeof useEditorStore>
@@ -26,10 +26,33 @@ export function useSelection(
 
   const selectionBounds = computed(() => {
     if (selectedElements.value.length === 0) return null
-    const els = getAnimatedEl
-      ? selectedElements.value.map(el => getAnimatedEl(el.id) ?? el)
-      : selectedElements.value
-    return getMultiBounds(els)
+
+    const elsForBounds: Element[] = []
+    for (const el of selectedElements.value) {
+      const animated = getAnimatedEl ? (getAnimatedEl(el.id) ?? el) : el
+
+      // For a mask group selected from outside: use only the mask shape's bounds.
+      // The mask shape (first child) defines the visible clipping region.
+      if (
+        animated.type === 'group' &&
+        (animated as GroupElement).hasMask &&
+        (animated as GroupElement).childIds.length > 0
+      ) {
+        const maskShapeId = (animated as GroupElement).childIds[0]
+        const maskShape = getAnimatedEl
+          ? (getAnimatedEl(maskShapeId) ?? editorStore.getElementById(maskShapeId))
+          : editorStore.getElementById(maskShapeId)
+        if (maskShape) {
+          elsForBounds.push(maskShape)
+          continue
+        }
+      }
+
+      elsForBounds.push(animated)
+    }
+
+    if (elsForBounds.length === 0) return null
+    return getMultiBounds(elsForBounds)
   })
 
   function select(id: string) { uiStore.select(id) }

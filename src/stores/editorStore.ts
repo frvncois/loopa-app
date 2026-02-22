@@ -279,26 +279,6 @@ export const useEditorStore = defineStore('editor', () => {
     if (imageStorageIds.length > 0) {
       import('@/lib/utils/videoStorage').then(m => m.deleteMediaBulk(imageStorageIds)).catch(() => {})
     }
-    // Mask cleanup: release masked elements / remove from mask lists
-    for (const id of allIds) {
-      const el = elements.value.find(e => e.id === id)
-      if (!el) continue
-      if (el.isMask && el.maskedElementIds) {
-        for (const maskedId of el.maskedElementIds) {
-          if (!allIds.has(maskedId)) {
-            const mi = elements.value.findIndex(e => e.id === maskedId)
-            if (mi !== -1) elements.value[mi] = { ...elements.value[mi], maskedById: null } as Element
-          }
-        }
-      }
-      if (el.maskedById && !allIds.has(el.maskedById)) {
-        const maskIdx = elements.value.findIndex(e => e.id === el.maskedById)
-        if (maskIdx !== -1) {
-          const newMasked = (elements.value[maskIdx].maskedElementIds ?? []).filter(mid => mid !== id)
-          elements.value[maskIdx] = { ...elements.value[maskIdx], maskedElementIds: newMasked } as Element
-        }
-      }
-    }
     // Remove from all frame.elements arrays
     for (const frame of frames.value) {
       frame.elements = frame.elements.filter(id => !allIds.has(id))
@@ -359,22 +339,7 @@ export const useEditorStore = defineStore('editor', () => {
         elements.value.push(groupClone)
         if (frame) frame.elements.push(newId)
       } else {
-        // Mask: clear mask state on copies (new mask starts with no masked elements;
-        // duplicated masked elements stay masked by the same mask)
-        const extraMaskProps: Partial<Element> = {}
-        if (el.isMask) {
-          extraMaskProps.isMask = false
-          extraMaskProps.maskedElementIds = []
-        } else if (el.maskedById) {
-          // Register the copy as also masked by the same mask
-          extraMaskProps.maskedById = el.maskedById
-          const maskIdx = elements.value.findIndex(e => e.id === el.maskedById)
-          if (maskIdx !== -1) {
-            const newMasked = [...(elements.value[maskIdx].maskedElementIds ?? []), newId]
-            elements.value[maskIdx] = { ...elements.value[maskIdx], maskedElementIds: newMasked } as Element
-          }
-        }
-        const clone = { ...el, ...extraMaskProps, id: newId, name: `${el.name} copy`, x: el.x + 20, y: el.y + 20 }
+        const clone = { ...el, id: newId, name: `${el.name} copy`, x: el.x + 20, y: el.y + 20 }
         elements.value.push(clone as Element)
         if (frame) frame.elements.push(newId)
       }

@@ -13,7 +13,7 @@ type Canvas = ReturnType<typeof useCanvas>
 
 export function useElementRotate(
   editorStore: EditorStore,
-  _uiStore: UiStore,
+  uiStore: UiStore,
   canvas: Canvas,
   getAnimatedEl?: (id: string) => Element | null,
   setAnimatedProp?: (id: string, props: Partial<AnimatableProps>) => void,
@@ -29,6 +29,7 @@ export function useElementRotate(
     if (ids.length === 0) return
 
     isRotating.value = true
+    uiStore.setTransforming(true)
 
     // For single-select: use the element's transform origin as pivot
     // For multi-select: use the group center
@@ -126,6 +127,7 @@ export function useElementRotate(
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
       isRotating.value = false
+      uiStore.setTransforming(false)
     }
 
     document.addEventListener('mousemove', onMove)

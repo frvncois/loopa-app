@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import { useUiStore } from '@/stores/uiStore'
 import { useEditorStore } from '@/stores/editorStore'
+import type { useAiAssistant } from '@/composables/useAiAssistant'
+import AiAssistantPanel from '@/components/ai/AiAssistantPanel.vue'
+
+const aiAssistant = inject('aiAssistant') as ReturnType<typeof useAiAssistant> | undefined
 
 import AlignmentSection from './AlignmentSection.vue'
 import LayoutSection from './LayoutSection.vue'
@@ -18,7 +22,6 @@ import FrameSettingsSection from './FrameSettingsSection.vue'
 import GridSnapSection from './GridSnapSection.vue'
 import MultiSelectInfo from './MultiSelectInfo.vue'
 import PlaybackSection from './PlaybackSection.vue'
-import AnimateStatusSection from './AnimateStatusSection.vue'
 import QuickAnimateSection from './QuickAnimateSection.vue'
 import KeyframeDetailSection from './KeyframeDetailSection.vue'
 import KeyframeListSection from './KeyframeListSection.vue'
@@ -109,18 +112,32 @@ const isImage = computed(() => selectedEl.value?.type === 'image')
 
       <!-- ── ANIMATE TAB ── -->
       <template v-if="ui.activePanel === 'animate'">
-        <PlaybackSection />
         <template v-if="hasSelection">
-          <AnimateStatusSection />
           <QuickAnimateSection />
           <KeyframeDetailSection />
-          <KeyframeListSection />
-          <ElementTimingSection />
           <StaggerSection v-if="isMulti" />
         </template>
       </template>
 
     </div>
+
+    <!-- AI assistant button -->
+    <div v-if="aiAssistant" class="ai-footer">
+      <button
+        class="ai-btn"
+        :class="{ 'is-active': aiAssistant.isOpen.value }"
+        title="Animation Assistant"
+        @click="aiAssistant.toggle()"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9.663 17h4.673M12 3v1m6.364 1.636-.707.707M21 12h-1M4 12H3m3.343-5.657-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+        </svg>
+        <span>Assistant</span>
+      </button>
+    </div>
+
+    <!-- AI Assistant panel slides up from the bottom -->
+    <AiAssistantPanel v-if="aiAssistant" />
   </div>
 </template>
 
@@ -133,6 +150,7 @@ const isImage = computed(() => selectedEl.value?.type === 'image')
   overflow: hidden;
   height: 100%;
   flex: 1;
+  position: relative;
 }
 
 .tabs-bar {
@@ -207,5 +225,30 @@ const isImage = computed(() => selectedEl.value?.type === 'image')
   cursor: pointer;
   transition: all var(--ease);
   &:hover { background: var(--bg-4); color: var(--text-1); border-color: var(--border-l); }
+}
+
+.ai-footer {
+  padding: 0.375rem 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.ai-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  border: none;
+  background: none;
+  color: var(--text-4);
+  font-size: 0.625rem;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  transition: color var(--ease), background var(--ease);
+  &:hover { color: var(--text-2); background: var(--bg-4); }
+  &.is-active {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
 }
 </style>

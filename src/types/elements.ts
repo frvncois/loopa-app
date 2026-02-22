@@ -55,10 +55,6 @@ export interface BaseElement {
   flipX: boolean
   flipY: boolean
   figmaNodeId?: string   // set when element was imported from Figma; used for sync
-  // Mask feature: one element clips others
-  isMask?: boolean
-  maskedElementIds?: string[]
-  maskedById?: string | null
   // Crop feature: per-element rectangular self-crop
   cropRect?: { x: number; y: number; width: number; height: number } | null
   // Transform origin (normalized 0-1, default center { x: 0.5, y: 0.5 })
@@ -133,6 +129,7 @@ export interface PathElement extends BaseElement {
 export interface GroupElement extends BaseElement {
   type: 'group'
   childIds: string[]
+  hasMask?: boolean   // Figma-style mask: first child clips all other children
 }
 
 export interface VideoElement extends BaseElement {

@@ -1,11 +1,13 @@
 import { ref, computed, type Ref } from 'vue'
 import { clamp } from '@/lib/utils/math'
+import { useUiStore } from '@/stores/uiStore'
 
 export function useCanvas(viewportRef: Ref<HTMLElement | null>) {
+  const uiStore = useUiStore()
   const zoom = ref(1)
   const panX = ref(0)
   const panY = ref(0)
-  let isPanning = ref(false)
+  const isPanning = ref(false)
   let panStartX = 0
   let panStartY = 0
   let panOriginX = 0
@@ -55,6 +57,7 @@ export function useCanvas(viewportRef: Ref<HTMLElement | null>) {
 
   function onWheel(e: WheelEvent) {
     e.preventDefault()
+    if (uiStore.isTransforming) return
     const el = viewportRef.value
     if (!el) return
 

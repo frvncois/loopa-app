@@ -23,10 +23,37 @@ const editor = useEditorStore()
 const ui = useUiStore()
 const timeline = useTimelineStore()
 
-// Only show elements for the active frame
-const activeFrameElements = computed(() =>
-  ui.activeFrameId ? editor.getElementsForFrame(ui.activeFrameId) : []
+// Only top-level elements for the active frame
+const topLevelElements = computed(() =>
+  ui.activeFrameId ? editor.getTopLevelElementsForFrame(ui.activeFrameId) : []
 )
+
+const collapsedGroups = ref<Set<string>>(new Set())
+
+function toggleGroupCollapse(groupId: string) {
+  const s = new Set(collapsedGroups.value)
+  if (s.has(groupId)) s.delete(groupId)
+  else s.add(groupId)
+  collapsedGroups.value = s
+}
+
+type TrackRow = { el: Element; depth: number }
+
+function flattenForTimeline(elements: Element[], depth: number): TrackRow[] {
+  const result: TrackRow[] = []
+  for (const el of elements) {
+    result.push({ el, depth })
+    if (el.type === 'group' && !collapsedGroups.value.has(el.id)) {
+      const children = ((el as any).childIds ?? [])
+        .map((id: string) => editor.getElementById(id))
+        .filter(Boolean) as Element[]
+      result.push(...flattenForTimeline(children, depth + 1))
+    }
+  }
+  return result
+}
+
+const visibleTracks = computed(() => flattenForTimeline(topLevelElements.value, 0))
 
 const PX_PER_FRAME = 8
 const RULER_OFFSET = 20
@@ -156,11 +183,11 @@ function onAreaMouseDown(e: MouseEvent) {
       const y2 = Math.max(startY, startY + marquee.value.h)
 
       const selected: string[] = []
-      activeFrameElements.value.forEach((el, rowIdx) => {
+      visibleTracks.value.forEach((track, rowIdx) => {
         const trackY1 = rowIdx * TRACK_H
         const trackY2 = trackY1 + TRACK_H
         if (trackY2 < y1 || trackY1 > y2) return
-        getKeyframes(el.id).forEach(kf => {
+        getKeyframes(track.el.id).forEach(kf => {
           const kfX = RULER_OFFSET + kf.frame * PX_PER_FRAME
           if (kfX >= x1 && kfX <= x2) selected.push(kf.id)
         })
@@ -274,14 +301,28 @@ const dragFrameOffset = computed(() =>
     <div ref="labelsRef" class="labels" @scroll="onLabelsScroll">
       <div class="spacer" />
       <div
-        v-for="el in activeFrameElements"
-        :key="el.id"
+        v-for="track in visibleTracks"
+        :key="track.el.id"
         class="label"
-        :class="{ 'is-selected': isSelected(el) }"
-        @click="onLabelClick(el, $event)"
+        :class="{ 'is-selected': isSelected(track.el), 'is-group': track.el.type === 'group' }"
+        :style="{ paddingLeft: `calc(0.5rem + ${track.depth} * 0.75rem)` }"
+        @click="onLabelClick(track.el, $event)"
       >
-        <component :is="typeIcons[el.type] ?? typeIcons.rect" class="icon" />
-        <span class="name">{{ el.name }}</span>
+        <button
+          v-if="track.el.type === 'group'"
+          class="group-toggle"
+          @click.stop="toggleGroupCollapse(track.el.id)"
+        >
+          <svg
+            :class="{ 'is-collapsed': collapsedGroups.has(track.el.id) }"
+            width="8" height="8" viewBox="0 0 8 8" fill="none"
+          >
+            <path d="M2 1L6 4L2 7" fill="none" stroke="currentColor" stroke-width="1.2"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <component v-else :is="typeIcons[track.el.type] ?? typeIcons.rect" class="icon" />
+        <span class="name">{{ track.el.name }}</span>
       </div>
     </div>
 
@@ -296,16 +337,16 @@ const dragFrameOffset = computed(() =>
         />
         <div ref="areaRef" class="area" @mousedown="onAreaMouseDown">
           <TimelineTrack
-            v-for="el in activeFrameElements"
-            :key="el.id"
-            :keyframes="getKeyframes(el.id)"
+            v-for="track in visibleTracks"
+            :key="track.el.id"
+            :keyframes="getKeyframes(track.el.id)"
             :pixels-per-frame="PX_PER_FRAME"
             :ruler-offset="RULER_OFFSET"
-            :selected="isSelected(el)"
+            :selected="isSelected(track.el)"
             :selected-keyframe-ids="ui.selectedKeyframeIds"
             :drag-frame-offset="dragFrameOffset"
             :dragging-ids="draggingIds"
-            :video-trim="el.type === 'video' ? { trimStart: (el as any).trimStart, trimEnd: (el as any).trimEnd, fps: timeline.fps } : undefined"
+            :video-trim="track.el.type === 'video' ? { trimStart: (track.el as any).trimStart, trimEnd: (track.el as any).trimEnd, fps: timeline.fps } : undefined"
             @keyframe-mousedown="onKeyframeMouseDown"
             @track-click="onTrackClick"
           />
@@ -352,13 +393,13 @@ const dragFrameOffset = computed(() =>
   height: 1.75rem;
   display: flex;
   align-items: center;
-  padding: 0 0.5rem;
   gap: 0.375rem;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: background var(--ease);
   &:hover { background: var(--bg-4); }
   &.is-selected { background: var(--accent-s); }
+  &.is-group { font-weight: 600; }
 }
 .icon { width: 0.75rem; height: 0.75rem; opacity: 0.4; flex-shrink: 0; }
 .name {
@@ -368,6 +409,22 @@ const dragFrameOffset = computed(() =>
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-2);
+}
+.group-toggle {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  svg { transition: transform 150ms var(--ease); }
+  svg.is-collapsed { transform: rotate(-90deg); }
+  &:hover { color: var(--text-2); }
 }
 .tracks {
   flex: 1;

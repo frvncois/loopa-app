@@ -35,6 +35,13 @@ export function useKeyframes(
           scaleX: el.scaleX,
           scaleY: el.scaleY,
           opacity: el.opacity,
+          blur: el.blur,
+          transformOriginX: (el as any).transformOrigin?.x ?? 0.5,
+          transformOriginY: (el as any).transformOrigin?.y ?? 0.5,
+          ...(el.fills[0]?.visible ? { fillColor: el.fills[0].color, fillOpacity: el.fills[0].opacity } : {}),
+          ...(el.strokes[0]?.visible ? { strokeColor: el.strokes[0].color, strokeWidth: el.strokes[0].width } : {}),
+          ...(el.type === 'text' ? { fontSize: (el as any).fontSize } : {}),
+          ...(el.type === 'rect' ? { rx: (el as any).rx ?? 0 } : {}),
         },
         easing: 'ease-out',
       })

@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, inject } from 'vue'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useTimelineStore } from '@/stores/timelineStore'
-import { useKeyframes } from '@/composables/useKeyframes'
+import type { useHistory } from '@/composables/useHistory'
 import { ANIMATION_PRESETS } from '@/lib/animation/presets'
 import type { EasingType } from '@/types/animation'
 
 const editor = useEditorStore()
 const ui = useUiStore()
 const timeline = useTimelineStore()
-const kfOps = useKeyframes(editor, ui, timeline)
+const history = inject<ReturnType<typeof useHistory>>('history')
 
 const duration = ref(0.5) // seconds
 const easing = ref<EasingType>('ease-out')
@@ -36,6 +36,7 @@ function applyPreset(presetId: string) {
     const newKfs = preset.apply(el, startFrame, durationFrames, easing.value)
     for (const kf of newKfs) editor.addKeyframe(kf)
   }
+  history?.save()
 }
 </script>
 
@@ -70,7 +71,7 @@ function applyPreset(presetId: string) {
 
 <style scoped>
 .section { padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border); }
-.title { font-size: 0.75rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.5rem; }
+.title { font-size: 0.575rem; font-weight: 600; text-transform: uppercase; color: var(--text-2); margin-bottom: 0.5rem; letter-spacing: 0.07em;}
 .preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; }
 .preset {
   height: 1.875rem; display: flex; align-items: center; justify-content: center;

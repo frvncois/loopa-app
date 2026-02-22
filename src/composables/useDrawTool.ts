@@ -70,6 +70,7 @@ export function useDrawTool(
       const el = createDefaultElement(type)
       editorStore.addElement({ ...el, x: startSvg.x - 50, y: startSvg.y - 50 }, frameId)
       uiStore.select(el.id)
+      uiStore.setTool('select')
     } else {
       const el = createDefaultElement(type)
       editorStore.addElement({
@@ -80,6 +81,7 @@ export function useDrawTool(
         height: drawPreview.height || 100
       }, frameId)
       uiStore.select(el.id)
+      uiStore.setTool('select')
     }
   }
 

@@ -6,10 +6,8 @@ import type { useClipboard } from '@/composables/useClipboard'
 import type { useSelection } from '@/composables/useSelection'
 import type { useCanvas } from '@/composables/useCanvas'
 import type { useCropTool } from '@/composables/useCropTool'
-import type { ImageElement } from '@/types/elements'
-import { storeImage } from '@/lib/utils/videoStorage'
-import { generateId } from '@/lib/utils/id'
-import { importSvg } from '@/lib/import/SvgImporter'
+import type { useMasking } from '@/composables/useMasking'
+import type { GroupElement } from '@/types/elements'
 
 export function useShortcuts(
   editor: ReturnType<typeof useEditorStore>,
@@ -19,20 +17,42 @@ export function useShortcuts(
   clipboard: ReturnType<typeof useClipboard>,
   selection: ReturnType<typeof useSelection>,
   canvas: ReturnType<typeof useCanvas>,
-  cropTool?: ReturnType<typeof useCropTool>
+  cropTool?: ReturnType<typeof useCropTool>,
+  masking?: ReturnType<typeof useMasking>
 ) {
-  function isTyping(e: KeyboardEvent): boolean {
-    const tag = (e.target as HTMLElement).tagName
-    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+  function isTyping(): boolean {
+    const el = document.activeElement
+    if (!el) return false
+    const tag = el.tagName
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+    return (el as HTMLElement).isContentEditable === true
   }
 
   function onKeyDown(e: KeyboardEvent) {
-    if (isTyping(e)) return
+    if (isTyping()) return
 
     const cmd = e.metaKey || e.ctrlKey
 
     // ── Cmd shortcuts ────────────────────────────────────────────
     if (cmd) {
+      // Cmd+Alt+M — Use as Mask (2+ selected) or Release Mask (single mask group)
+      if (e.altKey && (e.key === 'm' || e.key === 'M')) {
+        e.preventDefault()
+        const frameId = ui.activeFrameId
+        if (!frameId) return
+        if (ui.selectedIds.size >= 2) {
+          masking?.createMask([...ui.selectedIds], frameId)
+          history.save()
+        } else if (ui.selectedIds.size === 1) {
+          const selEl = editor.getElementById([...ui.selectedIds][0])
+          if (selEl?.type === 'group' && (selEl as GroupElement).hasMask) {
+            masking?.releaseMask(selEl.id)
+            history.save()
+          }
+        }
+        return
+      }
+
       switch (e.key) {
         case 'z':
           e.preventDefault()
@@ -52,16 +72,20 @@ export function useShortcuts(
           }
           return
         case 'c':
+          e.preventDefault()
           clipboard.copy()
+          return
+        case 'x':
+          e.preventDefault()
+          clipboard.cut()
+          history.save()
           return
         case 'v':
           e.preventDefault()
-          clipboard.paste()
-          history.save()
-          return
-        case 'x':
-          clipboard.cut()
-          history.save()
+          if (clipboard.canPaste.value) {
+            clipboard.paste()
+            history.save()
+          }
           return
         case 'a':
           e.preventDefault()
@@ -131,8 +155,6 @@ export function useShortcuts(
 
       // Add keyframe
       case 'k': case 'K':
-        // Handled externally via keyframeOps — emit an event-like signal
-        // by toggling a UI flag. Simplest: dispatch a custom event.
         window.dispatchEvent(new CustomEvent('loopa:addKeyframe'))
         return
 
@@ -140,7 +162,6 @@ export function useShortcuts(
       case 'Delete':
       case 'Backspace':
         if (ui.pathEditMode) {
-          // Delete selected point in path editor
           window.dispatchEvent(new CustomEvent('loopa:deletePathPoint'))
         } else if (ui.selectedKeyframeIds.size > 0) {
           for (const id of ui.selectedKeyframeIds) editor.deleteKeyframe(id)
@@ -221,104 +242,12 @@ export function useShortcuts(
     }
   }
 
-  // ── OS clipboard paste (images + SVG text) ───────────────────────────────
-
-  async function onPaste(e: ClipboardEvent) {
-    const tag = (e.target as HTMLElement)?.tagName
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
-    const items = Array.from(e.clipboardData?.items ?? [])
-
-    // Image file pasted from OS clipboard
-    const imageItem = items.find(it => it.type.startsWith('image/'))
-    if (imageItem) {
-      e.preventDefault()
-      const blob = imageItem.getAsFile()
-      if (!blob) return
-      const frameId = ui.activeFrameId
-      if (!frameId) return
-      try {
-        const tempUrl = URL.createObjectURL(blob)
-        const img = new Image()
-        await new Promise<void>(resolve => { img.onload = img.onerror = () => resolve(); img.src = tempUrl })
-        URL.revokeObjectURL(tempUrl)
-        const iw = img.naturalWidth || 200
-        const ih = img.naturalHeight || 200
-        const frame = editor.frames.find(f => f.id === frameId)
-        const fw = frame?.width ?? 800
-        const fh = frame?.height ?? 600
-        const scale = Math.min((fw * 0.8) / iw, (fh * 0.8) / ih, 1)
-        const w = Math.round(iw * scale)
-        const h = Math.round(ih * scale)
-        const storageId = generateId('img')
-        await storeImage(storageId, blob)
-        const el: ImageElement = {
-          id: generateId('el'),
-          type: 'image',
-          name: 'Pasted Image',
-          x: Math.round((fw - w) / 2),
-          y: Math.round((fh - h) / 2),
-          width: w, height: h,
-          rotation: 0, scaleX: 1, scaleY: 1,
-          opacity: 1, blendMode: 'normal',
-          fills: [], strokes: [], shadows: [], blur: 0,
-          visible: true, locked: false, flipX: false, flipY: false,
-          imageStorageId: storageId,
-          imageFileName: 'pasted.png',
-          imageFileSize: blob.size,
-          imageWidth: iw, imageHeight: ih,
-          objectFit: 'contain',
-        }
-        editor.addElement(el, frameId)
-        ui.select(el.id)
-        history.save()
-      } catch { /* ignore */ }
-      return
-    }
-
-    // SVG text pasted (e.g., exported from Figma / Illustrator)
-    const textItem = items.find(it => it.type === 'text/plain')
-    if (textItem) {
-      textItem.getAsString(async (text) => {
-        const trimmed = text.trim()
-        if (!trimmed.startsWith('<svg')) return
-        e.preventDefault()
-        const frameId = ui.activeFrameId
-        if (!frameId) return
-        const result = importSvg(trimmed)
-        if (result.elements.length === 0) return
-        for (const el of result.elements) editor.addElement(el, frameId)
-        const frame = editor.frames.find(f => f.id === frameId)
-        const fw = frame?.width ?? 800, fh = frame?.height ?? 600
-        const meta = result.metadata
-        if (meta) {
-          const scaleX = fw / (meta.sourceWidth || fw)
-          const scaleY = fh / (meta.sourceHeight || fh)
-          const sc = Math.min(scaleX, scaleY, 1)
-          if (sc !== 1) {
-            for (const el of result.elements) {
-              editor.updateElement(el.id, { x: Math.round(el.x * sc), y: Math.round(el.y * sc), width: Math.round(el.width * sc), height: Math.round(el.height * sc) })
-            }
-          }
-        }
-        ui.selectAll(result.elements.map(el => el.id))
-        history.save()
-      })
-      return
-    }
-
-    // Fall through: internal clipboard paste
-    clipboard.paste()
-    history.save()
-  }
-
   function register() {
     window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('paste', onPaste as EventListener)
   }
 
   function unregister() {
     window.removeEventListener('keydown', onKeyDown)
-    window.removeEventListener('paste', onPaste as EventListener)
   }
 
   return { register, unregister }

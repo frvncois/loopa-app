@@ -21,6 +21,7 @@ import { usePenTool } from '@/composables/usePenTool'
 import { usePathEditor } from '@/composables/usePathEditor'
 import { useMasking } from '@/composables/useMasking'
 import { useCropTool } from '@/composables/useCropTool'
+import { useAiAssistant } from '@/composables/useAiAssistant'
 import { useTransformOrigin } from '@/composables/useTransformOrigin'
 import { useFigmaSync } from '@/composables/useFigmaSync'
 import AppTopbar from '@/components/layout/AppTopbar.vue'
@@ -66,7 +67,7 @@ const clipboard = useClipboard(editor, ui)
 const masking = useMasking()
 const cropTool = useCropTool(editor, ui, canvas)
 
-const shortcuts = useShortcuts(editor, ui, timeline, history, clipboard, selection, canvas, cropTool)
+const shortcuts = useShortcuts(editor, ui, timeline, history, clipboard, selection, canvas, cropTool, masking)
 
 // Path system
 const penTool = usePenTool(editor, ui, canvas, () => history.save())
@@ -75,12 +76,17 @@ const pathEditor = usePathEditor(editor, ui, canvas, () => history.save())
 // Figma sync
 const figmaSync = useFigmaSync()
 
+// AI animation assistant
+const aiAssistant = useAiAssistant(history)
+
 provide('animation', animation)
 provide('keyframeOps', keyframeOps)
 provide('pathEditor', pathEditor)
 provide('getAnimatedElement', animatedEditing.getAnimatedElement)
 provide('setAnimatedProperty', animatedEditing.setAnimatedProperty)
 provide('cropTool', cropTool)
+provide('history', history)
+provide('aiAssistant', aiAssistant)
 
 // ── Template refs ─────────────────────────────────────────────
 const canvasVpRef = ref<InstanceType<typeof CanvasViewport> | null>(null)
@@ -254,50 +260,40 @@ const contextItems = computed(() => {
         }
       })
 
-      // Create mask: first selected element becomes the mask
-      const selArr = [...ui.selectedIds]
-      const potentialMask = editor.elements.find(e => e.id === selArr[0])
-      if (potentialMask && !potentialMask.isMask) {
-        items.push({
-          label: 'Create Mask',
-          shortcut: '⌘⇧M',
-          action: () => {
-            masking.createMask(selArr[0], selArr.slice(1))
+      // Use as Mask (Figma model: bottom element clips others)
+      items.push({
+        label: 'Use as Mask',
+        shortcut: '⌘⌥M',
+        action: () => {
+          const frameId = ui.activeFrameId
+          if (frameId) {
+            masking.createMask([...ui.selectedIds], frameId)
             history.save()
           }
-        })
-      }
+        }
+      })
     }
     if (ui.selectedIds.size === 1) {
       const selId = [...ui.selectedIds][0]
       const selEl = editor.elements.find(e => e.id === selId)
       if (selEl?.type === 'group') {
+        // Release Mask (if it's a mask group)
+        if ((selEl as any).hasMask) {
+          items.push({
+            label: 'Release Mask',
+            shortcut: '⌘⌥M',
+            action: () => {
+              masking.releaseMask(selId)
+              history.save()
+            }
+          })
+        }
         items.push({
           label: 'Ungroup',
           shortcut: '⌘⇧G',
           action: () => {
             const childIds = editor.ungroupElements(selId)
             ui.selectAll(childIds)
-            history.save()
-          }
-        })
-      }
-      // Mask release / remove
-      if (selEl?.isMask) {
-        items.push({
-          label: 'Release Mask',
-          shortcut: '⌘⌥M',
-          action: () => {
-            masking.releaseMask(selId)
-            history.save()
-          }
-        })
-      }
-      if (selEl?.maskedById) {
-        items.push({
-          label: 'Remove from Mask',
-          action: () => {
-            masking.removeFromMask(selId)
             history.save()
           }
         })

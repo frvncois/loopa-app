@@ -5,7 +5,6 @@ import { useUiStore } from '@/stores/uiStore'
 import { useTimelineStore } from '@/stores/timelineStore'
 import type { EasingType, Keyframe } from '@/types/animation'
 import EasingCurveEditor from './EasingCurveEditor.vue'
-import BaseToggle from '@/components/ui/BaseToggle.vue'
 
 const editor = useEditorStore()
 const ui = useUiStore()
@@ -81,7 +80,7 @@ function onPropChange(key: string, val: string) {
         :key="key"
         class="prop-row"
       >
-        <BaseToggle :model-value="true" :disabled="true" :label="PROP_LABELS[key] ?? key" class="prop-check" />
+        <span class="prop-label">{{ PROP_LABELS[key] ?? key }}</span>
         <input
           v-if="typeof val === 'number'"
           class="field is-narrow"
@@ -97,7 +96,7 @@ function onPropChange(key: string, val: string) {
 
 <style scoped>
 .section { padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border); }
-.title { font-size: 0.75rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.5rem; }
+.title { font-size: 0.575rem; font-weight: 600; text-transform: uppercase; color: var(--text-2); margin-bottom: 0.5rem; letter-spacing: 0.07em;}
 .subtitle { font-size: 0.625rem; font-weight: 600; color: var(--text-3); margin-bottom: 0.375rem; }
 .row { display: flex; align-items: center; gap: 0.375rem; margin-bottom: 0.375rem; min-height: 1.625rem; }
 .label { width: 4.5rem; min-width: 4.5rem; font-size: 0.75rem; color: var(--text-3); font-weight: 500; }
@@ -113,6 +112,6 @@ function onPropChange(key: string, val: string) {
   border-radius: var(--r-sm); color: var(--text-1); padding: 0 0.4375rem; font-size: 0.75rem; outline: none;
 }
 .prop-row { display: flex; align-items: center; gap: 0.375rem; margin-bottom: 0.25rem; min-height: 1.375rem; }
-.prop-check { flex: 1; padding: 0; }
+.prop-label { flex: 1; font-size: 0.6875rem; color: var(--text-2); }
 .prop-val { font-size: 0.625rem; color: var(--text-4); font-style: italic; }
 </style>

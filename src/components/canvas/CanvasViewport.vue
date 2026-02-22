@@ -20,7 +20,6 @@ import { generateId } from '@/lib/utils/id'
 import CanvasArtboard from './CanvasArtboard.vue'
 import CanvasGrid from './CanvasGrid.vue'
 import ElementRenderer from './ElementRenderer.vue'
-import MaskClipShape from './MaskClipShape.vue'
 import CropOverlay from './CropOverlay.vue'
 import SelectionOverlay from './SelectionOverlay.vue'
 import MarqueeSelect from './MarqueeSelect.vue'
@@ -69,11 +68,17 @@ const activeFrameKeyframes = computed(() =>
   ui.activeFrameId ? editor.getKeyframesForFrame(ui.activeFrameId) : []
 )
 
-// Compute animated props per element, reactive to currentFrame
+// All elements in the active frame (including group children) — needed for animated props
+const activeFrameAllElements = computed(() =>
+  ui.activeFrameId ? editor.getElementsForFrame(ui.activeFrameId) : []
+)
+
+// Compute animated props per element, reactive to currentFrame.
+// Covers ALL frame elements (including group children) so mask group children get animated props too.
 const animatedPropsMap = computed(() => {
   const frame = timeline.currentFrame
   const map = new Map<string, ReturnType<typeof computeElementAtFrame>>()
-  for (const el of activeFrameTopLevel.value) {
+  for (const el of activeFrameAllElements.value) {
     const kfs = activeFrameKeyframes.value.filter(kf => kf.elementId === el.id)
     if (kfs.length > 0) map.set(el.id, computeElementAtFrame(kfs, frame))
   }
@@ -108,11 +113,6 @@ function onOriginMouseDown(e: MouseEvent) {
   const id = [...ui.selectedIds][0]
   props.transformOriginComposable?.onOriginMouseDown(e, id)
 }
-
-// Mask elements in the active frame (for clipPath defs)
-const maskElements = computed(() =>
-  activeFrameTopLevel.value.filter(el => el.isMask)
-)
 
 // The element currently being cropped (for CropOverlay)
 const cropElement = computed(() => {
@@ -329,9 +329,23 @@ function onElementDblClick(e: MouseEvent, id: string) {
   }
 }
 
-// Provide event handlers so nested ElementRenderer components can delegate child events
+// Resize handler: for mask groups, target the mask shape and scale content siblings proportionally
+function onSelectionResizeStart(e: MouseEvent, h: string) {
+  if (ui.selectedIds.size !== 1) return
+  const id = [...ui.selectedIds][0]
+  const el = editor.getElementById(id)
+  if (el?.type === 'group' && (el as GroupElement).hasMask && (el as GroupElement).childIds.length > 0) {
+    const childIds = (el as GroupElement).childIds
+    props.elementResize.onResizeStart(e, h, childIds[0], childIds.slice(1))
+  } else {
+    props.elementResize.onResizeStart(e, h, id)
+  }
+}
+
+// Provide event handlers and animated props map so nested ElementRenderer components can use them
 provide('onElementMouseDown', onElementMouseDown)
 provide('onElementDblClick', onElementDblClick)
+provide('animatedPropsMap', animatedPropsMap)
 
 defineExpose({ viewportEl })
 </script>
@@ -376,38 +390,15 @@ defineExpose({ viewportEl })
           :artboard-height="activeFrame?.height ?? artboardHeight"
         />
 
-        <!-- Mask clipPath defs -->
-        <defs v-if="maskElements.length > 0">
-          <clipPath
-            v-for="mask in maskElements"
-            :key="mask.id"
-            :id="`mask-clip-${mask.id}`"
-            clipPathUnits="userSpaceOnUse"
-          >
-            <MaskClipShape :element="mask" />
-          </clipPath>
-        </defs>
-
         <!-- Elements (top-level only; groups render their children recursively) -->
-        <template v-for="el in activeFrameTopLevel" :key="el.id">
-          <!-- Masked element: wrapped in clip-path group -->
-          <g v-if="el.maskedById" :clip-path="`url(#mask-clip-${el.maskedById})`">
-            <ElementRenderer
-              :element="el"
-              :animated-props="animatedPropsMap.get(el.id)"
-              @mousedown.stop="(e: MouseEvent) => onElementMouseDown(e, el.id)"
-              @dblclick.stop="(e: MouseEvent) => onElementDblClick(e, el.id)"
-            />
-          </g>
-          <!-- Normal element -->
-          <ElementRenderer
-            v-else
-            :element="el"
-            :animated-props="animatedPropsMap.get(el.id)"
-            @mousedown.stop="(e: MouseEvent) => onElementMouseDown(e, el.id)"
-            @dblclick.stop="(e: MouseEvent) => onElementDblClick(e, el.id)"
-          />
-        </template>
+        <ElementRenderer
+          v-for="el in activeFrameTopLevel"
+          :key="el.id"
+          :element="el"
+          :animated-props="animatedPropsMap.get(el.id)"
+          @mousedown.stop="(e: MouseEvent) => onElementMouseDown(e, el.id)"
+          @dblclick.stop="(e: MouseEvent) => onElementDblClick(e, el.id)"
+        />
 
         <!-- Dim overlay outside artboard -->
         <defs>
@@ -447,7 +438,7 @@ defineExpose({ viewportEl })
           :is-rotating="elementRotate.isRotating.value"
           :rotation-deg="elementRotate.rotationDeg.value"
           :transform-origin="selectionTransformOrigin"
-          @resize-start="(e, h) => elementResize.onResizeStart(e, h, [...ui.selectedIds][0])"
+          @resize-start="(e, h) => onSelectionResizeStart(e, h)"
           @rotate-start="(e) => elementRotate.onRotateStart(e, [...ui.selectedIds], selection.selectionBounds.value!)"
           @origin-mousedown="onOriginMouseDown"
         />

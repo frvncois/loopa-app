@@ -92,7 +92,7 @@ function makeFilter(el: Element): string {
 }
 
 function wrapG(inner: string, el: Element, anim: AnimatableProps, clipPathId?: string): string {
-  const opacity = (anim.opacity ?? el.opacity) * (el.isMask ? 0.5 : 1)
+  const opacity = anim.opacity ?? el.opacity
   const transform = makeTransform(el, anim)
   const filter = makeFilter(el)
   const blend = el.blendMode !== 'normal' ? el.blendMode : ''
@@ -116,9 +116,9 @@ function makeCropClipPath(el: Element, anim: AnimatableProps): string {
   return `<clipPath id="crop-${el.id}" clipPathUnits="userSpaceOnUse"><g${transformAttr}><rect x="${x}" y="${y}" width="${r(cropRect.width)}" height="${r(cropRect.height)}"/></g></clipPath>`
 }
 
-function makeMaskClipPath(el: Element, allElements: Element[], anim: AnimatableProps): string {
+function makeMaskClipPath(el: Element, _allElements: Element[], anim: AnimatableProps): string {
   const shape = serializeMaskShape(el, anim)
-  return `<clipPath id="mask-${el.id}" clipPathUnits="userSpaceOnUse">${shape}</clipPath>`
+  return `<defs><clipPath id="mask-${el.id}" clipPathUnits="userSpaceOnUse">${shape}</clipPath></defs>`
 }
 
 function serializeMaskShape(el: Element, anim: AnimatableProps): string {
@@ -280,6 +280,28 @@ function serializeImage(el: Element, anim: AnimatableProps, imageDataUrls?: Map<
 
 function serializeGroup(el: Element, anim: AnimatableProps, allElements: Element[], states: Map<string, AnimatableProps>): string {
   const group = el as GroupElement
+
+  // Figma-style mask group: first child clips all other children
+  if (group.hasMask && group.childIds.length >= 1) {
+    const maskShapeId = group.childIds[0]
+    const maskShape = allElements.find(e => e.id === maskShapeId)
+    const maskAnim = maskShape ? states.get(maskShape.id) ?? {} : {}
+    const clipDef = maskShape ? makeMaskClipPath(maskShape, allElements, maskAnim) : ''
+    const clippedInner = group.childIds.slice(1)
+      .map(id => {
+        const child = allElements.find(e => e.id === id)
+        if (!child || !child.visible) return ''
+        return serializeElement(child, states.get(child.id) ?? {}, allElements, states)
+      })
+      .join('')
+    const clippedGroup = clippedInner
+      ? `<g clip-path="url(#mask-${maskShapeId})">${clippedInner}</g>`
+      : ''
+    // The mask shape itself is invisible in the export (its geometry only appears in the clipPath)
+    const inner = `${clipDef}${clippedGroup}`
+    return wrapG(inner, el, anim)
+  }
+
   const inner = group.childIds
     .map(id => {
       const child = allElements.find(e => e.id === id)
@@ -334,13 +356,10 @@ export function serializeFrame(
     elements.flatMap(el => el.type === 'group' ? (el as GroupElement).childIds : [])
   )
 
-  // Build <defs> for mask clipPaths and crop clipPaths
+  // Build <defs> for crop clipPaths at top level (mask clipPaths are inlined by serializeGroup)
   const topLevel = elements.filter(el => el.visible && !childIds.has(el.id))
   const defParts: string[] = []
   for (const el of topLevel) {
-    if (el.isMask) {
-      defParts.push(makeMaskClipPath(el, elements, states.get(el.id) ?? {}))
-    }
     if (el.cropRect) {
       defParts.push(makeCropClipPath(el, states.get(el.id) ?? {}))
     }
@@ -352,14 +371,7 @@ export function serializeFrame(
     : ''
 
   const shapes = topLevel
-    .map(el => {
-      const serialized = serializeElement(el, states.get(el.id) ?? {}, elements, states, imageDataUrls)
-      // Wrap masked elements in their mask's clip-path
-      if (el.maskedById) {
-        return `<g clip-path="url(#mask-${el.maskedById})">${serialized}</g>`
-      }
-      return serialized
-    })
+    .map(el => serializeElement(el, states.get(el.id) ?? {}, elements, states, imageDataUrls))
     .join('\n')
 
   return (

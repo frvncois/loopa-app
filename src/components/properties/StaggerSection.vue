@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, inject } from 'vue'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useTimelineStore } from '@/stores/timelineStore'
-import { useKeyframes } from '@/composables/useKeyframes'
+import type { useHistory } from '@/composables/useHistory'
 import { ANIMATION_PRESETS } from '@/lib/animation/presets'
 import type { EasingType } from '@/types/animation'
 
 const editor = useEditorStore()
 const ui = useUiStore()
 const timeline = useTimelineStore()
-const kfOps = useKeyframes(editor, ui, timeline)
+const history = inject<ReturnType<typeof useHistory>>('history')
 
 const staggerMs = ref(50)
 const preset = ref('fade-in')
@@ -29,6 +29,7 @@ function applyStagger() {
     const newKfs = p.apply(el, startFrame, durationFrames.value, easing.value)
     for (const kf of newKfs) editor.addKeyframe(kf)
   })
+  history?.save()
 }
 </script>
 
@@ -57,7 +58,7 @@ function applyStagger() {
 
 <style scoped>
 .section { padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border); }
-.title { font-size: 0.75rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.5rem; }
+.title { font-size: 0.575rem; font-weight: 600; text-transform: uppercase; color: var(--text-2); margin-bottom: 0.5rem; letter-spacing: 0.07em;}
 .row { display: flex; align-items: center; gap: 0.375rem; margin-bottom: 0.375rem; min-height: 1.625rem; }
 .label { width: 4.5rem; min-width: 4.5rem; font-size: 0.75rem; color: var(--text-3); font-weight: 500; }
 .field {

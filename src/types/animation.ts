@@ -1,4 +1,4 @@
-import type { PathPoint } from './elements'
+import type { PathPoint, Element } from './elements'
 
 export type EasingPreset =
   | 'linear'
@@ -21,9 +21,16 @@ export interface AnimatableProps {
   opacity?: number
   rx?: number
   fillColor?: string
+  fillOpacity?: number
   strokeColor?: string
   strokeWidth?: number
   fontSize?: number
+  blur?: number
+  shadowOffsetX?: number
+  shadowOffsetY?: number
+  shadowBlur?: number
+  shadowOpacity?: number
+  shadowColor?: string
   d?: string
   points?: PathPoint[]
   transformOriginX?: number
@@ -48,8 +55,7 @@ export type PlaybackDirection = 'normal' | 'reverse' | 'alternate' | 'alternate-
 
 export interface AnimationPreset {
   id: string
-  name: string
-  icon: string
-  category: 'entrance' | 'exit' | 'emphasis' | 'motion'
-  generate: (elementId: string, startFrame: number, durationFrames: number, easing: EasingType) => Keyframe[]
+  label: string
+  icon: unknown
+  apply: (element: Element, startFrame: number, durationFrames: number, easing: EasingType) => Keyframe[]
 }

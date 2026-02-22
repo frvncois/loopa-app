@@ -22,7 +22,7 @@ function snapOrigin(v: number): number {
 
 export function useTransformOrigin(
   _editor: EditorStore,
-  _ui: UiStore,
+  uiStore: UiStore,
   canvas: Canvas,
   getAnimatedElement: (id: string) => Element | null,
   setAnimatedProperty: (id: string, props: Partial<AnimatableProps>) => void,
@@ -34,10 +34,12 @@ export function useTransformOrigin(
     e.preventDefault()
     e.stopPropagation()
     isDraggingOrigin.value = true
+    uiStore.setTransforming(true)
 
     const el = getAnimatedElement(elementId)
     if (!el) {
       isDraggingOrigin.value = false
+      uiStore.setTransforming(false)
       return
     }
 
@@ -79,6 +81,7 @@ export function useTransformOrigin(
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
       isDraggingOrigin.value = false
+      uiStore.setTransforming(false)
       history.save()
     }
 

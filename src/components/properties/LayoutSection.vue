@@ -87,7 +87,7 @@ function isPresetActive(px: number, py: number): boolean {
       <input class="field is-pair" type="number" :value="Math.round(el.rotation)" @change="update('rotation', ($event.target as HTMLInputElement).value)" />
     </div>
     <div v-if="el.type === 'rect'" class="row">
-      <span class="label">Corner radius</span>
+      <span class="label">Radius</span>
       <input class="field is-pair" type="number" :value="(el as any).rx ?? 0" @change="e => { update('rx', (e.target as HTMLInputElement).value); update('ry', (e.target as HTMLInputElement).value) }" />
     </div>
 
@@ -121,7 +121,7 @@ function isPresetActive(px: number, py: number): boolean {
 
 <style scoped>
 .section { padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border); }
-.title { font-size: 0.75rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.5rem; }
+.title { font-size: 0.575rem; font-weight: 600; text-transform: uppercase; color: var(--text-2); margin-bottom: 0.5rem; letter-spacing: 0.07em;}
 .row {
   display: flex;
   align-items: center;

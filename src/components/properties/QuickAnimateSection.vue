@@ -12,7 +12,16 @@ const ui = useUiStore()
 const timeline = useTimelineStore()
 const history = inject<ReturnType<typeof useHistory>>('history')
 
-const isMulti = computed(() => ui.selectedIds.size > 1)
+// Show stagger when selected keyframes span 2+ elements
+const canStagger = computed(() => {
+  if (ui.selectedKeyframeIds.size < 2) return false
+  const elementIds = new Set<string>()
+  for (const kf of editor.keyframes) {
+    if (ui.selectedKeyframeIds.has(kf.id)) elementIds.add(kf.elementId)
+    if (elementIds.size >= 2) return true
+  }
+  return false
+})
 
 const duration = ref(0.5) // seconds
 const easing = ref<EasingType>('ease-out')
@@ -32,31 +41,63 @@ function applyPreset(presetId: string) {
   if (!preset) return
   const durationFrames = Math.round(duration.value * timeline.fps)
   const startFrame = Math.round(timeline.currentFrame)
+  const newKfIds: string[] = []
   for (const id of ui.selectedIds) {
     const el = editor.getElementById(id)
     if (!el) continue
     const newKfs = preset.apply(el, startFrame, durationFrames, easing.value)
-    for (const kf of newKfs) editor.addKeyframe(kf)
+    for (const kf of newKfs) {
+      editor.addKeyframe(kf)
+      newKfIds.push(kf.id)
+    }
   }
+  // Auto-select all newly created keyframes
+  ui.selectKeyframes(newKfIds)
   history?.save()
 }
 
 // ── Stagger ───────────────────────────────────────────────────
-const staggerMs     = ref(50)
-const staggerPreset = ref(ANIMATION_PRESETS[0]?.id ?? 'fade-in')
-const staggerFrames = ref(12)
+const staggerMs = ref(50)
 
 function applyStagger() {
-  const p = ANIMATION_PRESETS.find(p => p.id === staggerPreset.value)
-  if (!p) return
-  const ids = [...ui.selectedIds]
+  const selectedKfIds = ui.selectedKeyframeIds
+  if (selectedKfIds.size === 0) return
+
+  // Collect selected keyframes from the store
+  const selectedKfs = editor.keyframes.filter(kf => selectedKfIds.has(kf.id))
+  if (selectedKfs.length === 0) return
+
+  // Group keyframes by elementId
+  const byElement = new Map<string, typeof selectedKfs>()
+  for (const kf of selectedKfs) {
+    let arr = byElement.get(kf.elementId)
+    if (!arr) { arr = []; byElement.set(kf.elementId, arr) }
+    arr.push(kf)
+  }
+
+  // Order elements by ui.selectedIds (preserves user selection order),
+  // falling back to the order keyframes appear for elements not in selectedIds
+  const orderedElementIds: string[] = []
+  for (const id of ui.selectedIds) {
+    if (byElement.has(id)) orderedElementIds.push(id)
+  }
+  for (const id of byElement.keys()) {
+    if (!orderedElementIds.includes(id)) orderedElementIds.push(id)
+  }
+
+  // Find the base frame (earliest frame across all selected keyframes)
+  const baseFrame = Math.min(...selectedKfs.map(kf => kf.frame))
   const staggerF = Math.round((staggerMs.value / 1000) * timeline.fps)
-  ids.forEach((id, i) => {
-    const el = editor.getElementById(id)
-    if (!el) return
-    const startFrame = Math.round(timeline.currentFrame) + i * staggerF
-    const newKfs = p.apply(el, startFrame, staggerFrames.value, easing.value)
-    for (const kf of newKfs) editor.addKeyframe(kf)
+
+  // For each element at index i, shift all its selected keyframes by i * staggerF
+  orderedElementIds.forEach((elId, i) => {
+    const kfs = byElement.get(elId)!
+    const elMinFrame = Math.min(...kfs.map(kf => kf.frame))
+    const offset = (i * staggerF) - (elMinFrame - baseFrame)
+    if (offset === 0) return
+    for (const kf of kfs) {
+      editor.updateKeyframe(kf.id, { frame: kf.frame + offset })
+    }
   })
   history?.save()
 }
@@ -88,25 +129,14 @@ function applyStagger() {
       </select>
     </div>
 
-    <!-- ── Stagger (multi-select only) ── -->
-    <template v-if="isMulti">
+    <!-- ── Stagger (when keyframes from multiple elements are selected) ── -->
+    <template v-if="canStagger">
       <div class="divider" />
       <div class="sub-label">Stagger</div>
       <div class="row">
         <span class="label">Delay</span>
         <input class="field" type="number" min="0" step="10" v-model.number="staggerMs" />
         <span class="unit">ms</span>
-      </div>
-      <div class="row">
-        <span class="label">Preset</span>
-        <select class="select" v-model="staggerPreset">
-          <option v-for="p in ANIMATION_PRESETS" :key="p.id" :value="p.id">{{ p.label }}</option>
-        </select>
-      </div>
-      <div class="row">
-        <span class="label">Duration</span>
-        <input class="field" type="number" min="1" v-model.number="staggerFrames" />
-        <span class="unit">fr</span>
       </div>
       <button class="apply" @click="applyStagger">Apply Stagger</button>
     </template>

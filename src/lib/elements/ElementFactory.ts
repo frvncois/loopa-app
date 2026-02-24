@@ -132,6 +132,10 @@ export function createDefaultElement(type: ElementType): Element {
       }
       return el
     }
+    default: {
+      // video and image elements are created via their own modals, not createDefaultElement
+      throw new Error(`createDefaultElement: unsupported type "${type}"`)
+    }
   }
 }
 
@@ -149,6 +153,9 @@ export function createGroup(childIds: string[], allElements: Element[]): GroupEl
     width: bounds.width,
     height: bounds.height,
     rotation: 0,
+    rotateX: 0,
+    rotateY: 0,
+    perspective: 800,
     scaleX: 1,
     scaleY: 1,
     opacity: 1,

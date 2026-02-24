@@ -417,7 +417,7 @@ export function serializeFrame(
   const defs = defParts.length ? `<defs>${defParts.join('')}</defs>` : ''
 
   const bg = background
-    ? `<rect width="${artboard.width}" height="${artboard.height}" fill="${background}"/>`
+    ? `<rect width="${artboard.width}" height="${artboard.height}" fill="${background.startsWith('#') ? background : '#' + background}"/>`
     : ''
 
   const shapes = topLevel

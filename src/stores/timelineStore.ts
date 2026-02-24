@@ -56,7 +56,12 @@ export const useTimelineStore = defineStore('timeline', () => {
           return
         }
       }
-    } else if (dir === 'ping-pong') {
+    } else if (dir === 'alternate' || dir === 'alternate-reverse') {
+      // alternate: forward-first ping-pong; alternate-reverse: backward-first
+      if (dir === 'alternate-reverse' && pingPongForward && lastTime !== null && lastTime === ts) {
+        // First tick of alternate-reverse → start going backward
+        pingPongForward = false
+      }
       if (pingPongForward) {
         next += frameDelta
         if (next >= totalFrames.value) {
@@ -99,7 +104,7 @@ export const useTimelineStore = defineStore('timeline', () => {
     if (isPlaying.value) return
     isPlaying.value = true
     lastTime = null
-    pingPongForward = true
+    pingPongForward = direction.value !== 'alternate-reverse'
     rafId = requestAnimationFrame(_tick)
   }
 

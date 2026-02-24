@@ -10,8 +10,8 @@ export function lsGet<T>(key: string): T | null {
 export function lsSet(key: string, value: unknown): void {
   try {
     localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // storage full or unavailable
+  } catch (e) {
+    console.warn(`[Loopa] localStorage write failed for key "${key}":`, e)
   }
 }
 

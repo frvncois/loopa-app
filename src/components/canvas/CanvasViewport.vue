@@ -32,6 +32,9 @@ import PenToolOverlay from './PenToolOverlay.vue'
 import PathPointHandle from './PathPointHandle.vue'
 import IconZoomOut from '@/components/icons/IconZoomOut.vue'
 import IconZoomIn from '@/components/icons/IconZoomIn.vue'
+import CanvasRuler from './CanvasRuler.vue'
+import ContextMenu from '@/components/ui/ContextMenu.vue'
+import { useGuides } from '@/composables/useGuides'
 
 const props = defineProps<{
   canvas: ReturnType<typeof useCanvas>
@@ -55,16 +58,24 @@ const editor = useEditorStore()
 const timeline = useTimelineStore()
 
 const maskId = Math.random().toString(36).slice(2, 8)
+const RULER_SIZE = 20 // px — matches CanvasRuler CSS
+const rulerUnit = ref<'px' | '%'>('px')
 const DRAW_TOOLS: ElementType[] = ['rect', 'ellipse', 'line', 'polygon', 'star', 'text']
 
-// viewportEl points to canvas-area (inset by ruler size) so that
-// screenToSvg, viewBox, and fitToView all use the correct coordinate origin.
+// viewportEl points to the canvas-area div; screenToSvg uses its bounding rect.
 const viewportEl = ref<HTMLElement>()
 
 // Active frame data
 const activeFrame = computed(() =>
   ui.activeFrameId ? editor.frames.find(f => f.id === ui.activeFrameId) ?? null : null
 )
+
+// ── Artboard dimensions (used by rulers + guides) ──
+const abW = computed(() => activeFrame.value?.width ?? props.artboardWidth)
+const abH = computed(() => activeFrame.value?.height ?? props.artboardHeight)
+
+// ── Guides ──
+const guidesComposable = useGuides(viewportEl, props.canvas, abW, abH)
 
 const activeFrameTopLevel = computed(() =>
   ui.activeFrameId ? editor.getTopLevelElementsForFrame(ui.activeFrameId) : []
@@ -451,6 +462,24 @@ function onContextMenu(e: MouseEvent) {
   ui.showContextMenu(e.clientX, e.clientY)
 }
 
+// ── Guide context menu items ──
+const guideContextItems = computed(() => {
+  const gid = ui.guideContextMenu.guideId
+  const guide = ui.guides.find((g: { id: string }) => g.id === gid)
+  if (!guide) return []
+  return [
+    {
+      label: guide.locked ? 'Unlock guide' : 'Lock guide',
+      action: () => ui.toggleGuideLock(gid)
+    },
+    {
+      label: 'Remove guide',
+      action: () => ui.removeGuide(gid),
+      danger: true
+    }
+  ]
+})
+
 // ── Canvas drag-drop for images ───────────────────────────────────────────────
 
 function onDragOver(e: DragEvent) {
@@ -679,6 +708,7 @@ defineExpose({ viewportEl })
           pointer-events="none"
         />
 
+
         <!-- Crop overlay (shown when in crop mode) -->
         <CropOverlay
           v-if="cropTool.isCropMode.value && cropElement && cropTool.tempCropRect.value"
@@ -893,7 +923,118 @@ defineExpose({ viewportEl })
           <IconZoomIn />
         </button>
       </div>
+
+      <!-- ── Artboard-edge rulers ── -->
+      <!-- Top ruler (horizontal, above artboard) -->
+      <div
+        v-if="ui.showRulers"
+        class="ruler-wrap"
+        :style="{
+          left: canvas.panX.value + 'px',
+          top: (canvas.panY.value - RULER_SIZE) + 'px',
+          width: (abW * canvas.zoom.value) + 'px',
+          height: RULER_SIZE + 'px'
+        }"
+      >
+        <CanvasRuler
+          direction="horizontal"
+          :zoom="canvas.zoom.value"
+          :unit="rulerUnit"
+          :artboard-length="abW"
+          @dragstart="(e: MouseEvent) => guidesComposable.startDragFromRuler(e, 'horizontal')"
+        />
+      </div>
+      <!-- Left ruler (vertical, left of artboard) -->
+      <div
+        v-if="ui.showRulers"
+        class="ruler-wrap"
+        :style="{
+          left: (canvas.panX.value - RULER_SIZE) + 'px',
+          top: canvas.panY.value + 'px',
+          width: RULER_SIZE + 'px',
+          height: (abH * canvas.zoom.value) + 'px'
+        }"
+      >
+        <CanvasRuler
+          direction="vertical"
+          :zoom="canvas.zoom.value"
+          :unit="rulerUnit"
+          :artboard-length="abH"
+          @dragstart="(e: MouseEvent) => guidesComposable.startDragFromRuler(e, 'vertical')"
+        />
+      </div>
+      <!-- Ruler corner toggle (px ↔ %) -->
+      <div
+        v-if="ui.showRulers"
+        class="ruler-corner"
+        :style="{
+          left: (canvas.panX.value - RULER_SIZE) + 'px',
+          top: (canvas.panY.value - RULER_SIZE) + 'px',
+          width: RULER_SIZE + 'px',
+          height: RULER_SIZE + 'px'
+        }"
+        @click="rulerUnit = rulerUnit === 'px' ? '%' : 'px'"
+      >
+        <span :class="{ 'is-active': rulerUnit === 'px' }">px</span>
+        <span :class="{ 'is-active': rulerUnit === '%' }">%</span>
+      </div>
+
+      <!-- ── Guide interaction overlays (hit area + visual via ::after) ── -->
+      <template v-for="guide in ui.guides" :key="guide.id">
+        <div
+          v-if="guide.axis === 'horizontal' && !(guidesComposable.isDragging.value && guidesComposable.dragGuideId.value === guide.id)"
+          class="guide-overlay guide-h"
+          :class="{ 'is-locked': guide.locked }"
+          :style="{ top: (guide.position * canvas.zoom.value + canvas.panY.value) + 'px' }"
+          @mousedown="(e: MouseEvent) => guidesComposable.startDragExistingGuide(e, guide)"
+          @contextmenu="(e: MouseEvent) => guidesComposable.onGuideContextMenu(e, guide.id)"
+        />
+        <div
+          v-if="guide.axis === 'vertical' && !(guidesComposable.isDragging.value && guidesComposable.dragGuideId.value === guide.id)"
+          class="guide-overlay guide-v"
+          :class="{ 'is-locked': guide.locked }"
+          :style="{ left: (guide.position * canvas.zoom.value + canvas.panX.value) + 'px' }"
+          @mousedown="(e: MouseEvent) => guidesComposable.startDragExistingGuide(e, guide)"
+          @contextmenu="(e: MouseEvent) => guidesComposable.onGuideContextMenu(e, guide.id)"
+        />
+      </template>
+
+      <!-- Drag-preview guide (shown while dragging from ruler) -->
+      <div
+        v-if="guidesComposable.isDragging.value && guidesComposable.dragAxis.value === 'horizontal'"
+        class="guide-overlay guide-h guide-preview"
+        :style="{ top: (guidesComposable.dragPosition.value * canvas.zoom.value + canvas.panY.value) + 'px' }"
+      />
+      <div
+        v-if="guidesComposable.isDragging.value && guidesComposable.dragAxis.value === 'vertical'"
+        class="guide-overlay guide-v guide-preview"
+        :style="{ left: (guidesComposable.dragPosition.value * canvas.zoom.value + canvas.panX.value) + 'px' }"
+      />
+
+      <!-- Guide position tooltip -->
+      <div
+        v-if="guidesComposable.isDragging.value"
+        class="guide-tooltip"
+        :style="{
+          left: (guidesComposable.dragScreenX.value + 14) + 'px',
+          top: (guidesComposable.dragScreenY.value - 28) + 'px'
+        }"
+      >
+        <span>{{ Math.round(guidesComposable.dragPosition.value) }}px</span>
+        <span class="sep">/</span>
+        <span>{{ Math.round(guidesComposable.dragPosition.value / (guidesComposable.dragAxis.value === 'horizontal' ? abH : abW) * 100) }}%</span>
+      </div>
+
     </div>
+
+    <!-- Guide context menu -->
+    <ContextMenu
+      :show="ui.guideContextMenu.show"
+      :x="ui.guideContextMenu.x"
+      :y="ui.guideContextMenu.y"
+      :items="guideContextItems"
+      @close="ui.hideGuideContextMenu()"
+    />
   </div>
 </template>
 
@@ -971,5 +1112,98 @@ defineExpose({ viewportEl })
   padding: 0.25rem 0.625rem;
   pointer-events: none;
   white-space: nowrap;
+}
+
+/* ── Artboard-edge ruler wrappers ── */
+.ruler-wrap {
+  position: absolute;
+  z-index: 5;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.ruler-corner {
+  position: absolute;
+  z-index: 6;
+  background: var(--bg-2);
+  border-right: 1px solid #3a3a4a;
+  border-bottom: 1px solid #3a3a4a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  cursor: pointer;
+  user-select: none;
+  &:hover { background: var(--bg-3); }
+  span {
+    font-size: 0.4375rem;
+    font-family: var(--mono);
+    color: var(--text-4);
+    line-height: 1;
+    &.is-active { color: var(--text-1); }
+  }
+}
+
+/* ── Guide overlays (hit area + visual line via ::after, z-index above rulers) ── */
+.guide-overlay {
+  position: absolute;
+  z-index: 6;
+}
+.guide-overlay.guide-h {
+  left: 0;
+  right: 0;
+  height: 5px;
+  margin-top: -2px;
+  cursor: ns-resize;
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    top: 2px;
+    height: 1px;
+    background: #00d4ff;
+  }
+}
+.guide-overlay.guide-v {
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  margin-left: -2px;
+  cursor: ew-resize;
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 2px;
+    width: 1px;
+    background: #00d4ff;
+  }
+}
+.guide-overlay.is-locked {
+  cursor: default;
+  &::after { opacity: 0.5; }
+}
+.guide-overlay.guide-preview {
+  pointer-events: none;
+  &::after { opacity: 0.5; }
+}
+
+.guide-tooltip {
+  position: absolute;
+  z-index: 10;
+  background: var(--bg-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 2px 6px;
+  font-size: 0.625rem;
+  font-family: var(--mono);
+  color: var(--text-1);
+  pointer-events: none;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  .sep { color: var(--text-4); }
 }
 </style>

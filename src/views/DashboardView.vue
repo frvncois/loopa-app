@@ -11,6 +11,7 @@ import IconEmpty from '@/components/icons/IconEmpty.vue'
 import IconTrash from '@/components/icons/IconTrash.vue'
 import IconPlus from '@/components/icons/IconPlus.vue'
 import NewProjectModal from '@/components/modals/NewProjectModal.vue'
+import ProfileSetupModal from '@/components/modals/ProfileSetupModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 
@@ -60,8 +61,8 @@ const thumbnailMap = computed(() => {
   return map
 })
 
-function logout() {
-  auth.logout()
+async function logout() {
+  await auth.logout()
   router.push('/login')
 }
 </script>
@@ -76,7 +77,7 @@ function logout() {
       </div>
       <span class="dash-title">Dashboard</span>
       <div class="dash-spacer" />
-      <span class="dash-user">{{ auth.user?.email }}</span>
+      <span class="dash-user">{{ auth.displayName || auth.user?.email }}</span>
       <button class="logout-btn" @click="logout">
         <IconLogout />
         Logout
@@ -129,6 +130,9 @@ function logout() {
     </button>
 
     <NewProjectModal :open="showNew" @create="onCreate" @createFromFigma="onCreateFromFigma" @close="showNew = false" />
+
+    <!-- Profile setup (first login) -->
+    <ProfileSetupModal :open="auth.needsOnboarding" />
 
     <ConfirmDialog
       :open="deleteTarget !== null"

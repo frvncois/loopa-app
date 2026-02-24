@@ -171,7 +171,7 @@ export function useShortcuts(
         if (ui.pathEditMode) {
           window.dispatchEvent(new CustomEvent('loopa:deletePathPoint'))
         } else if (ui.selectedKeyframeIds.size > 0) {
-          for (const id of ui.selectedKeyframeIds) editor.deleteKeyframe(id)
+          editor.deleteKeyframes([...ui.selectedKeyframeIds])
           ui.clearKeyframeSelection()
         } else if (ui.selectedIds.size > 0) {
           editor.deleteElements([...ui.selectedIds])

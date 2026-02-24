@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, reactive, watch } from 'vue'
 import type { ToolType } from '@/types/tools'
+import type { Guide } from '@/types/guides'
+import { generateId } from '@/lib/utils/id'
 const PANEL_STORAGE_KEY = 'loopa_panel_widths'
 
 function loadPanelWidths() {
@@ -38,6 +40,59 @@ export const useUiStore = defineStore('ui', () => {
   const editorTheme = ref<'dark' | 'light'>(
     (localStorage.getItem('loopa_editor_theme') as 'dark' | 'light') || 'dark'
   )
+
+  // ── Guides ──
+  const GUIDES_KEY = 'loopa_guides'
+  const guides = ref<Guide[]>(loadGuides())
+  const showRulers = ref(true)
+  const guideContextMenu = reactive({ show: false, x: 0, y: 0, guideId: '' })
+
+  function loadGuides(): Guide[] {
+    try {
+      const raw = localStorage.getItem(GUIDES_KEY)
+      if (raw) return JSON.parse(raw) as Guide[]
+    } catch {}
+    return []
+  }
+
+  watch(guides, val => {
+    try { localStorage.setItem(GUIDES_KEY, JSON.stringify(val)) } catch {}
+  }, { deep: true })
+
+  function addGuide(axis: Guide['axis'], position: number): Guide {
+    const g: Guide = { id: generateId(), axis, position, locked: false }
+    guides.value.push(g)
+    return g
+  }
+
+  function updateGuidePosition(id: string, position: number): void {
+    const g = guides.value.find(g => g.id === id)
+    if (g && !g.locked) g.position = position
+  }
+
+  function removeGuide(id: string): void {
+    guides.value = guides.value.filter(g => g.id !== id)
+  }
+
+  function toggleGuideLock(id: string): void {
+    const g = guides.value.find(g => g.id === id)
+    if (g) g.locked = !g.locked
+  }
+
+  function clearGuides(): void {
+    guides.value = []
+  }
+
+  function showGuideContextMenu(x: number, y: number, guideId: string): void {
+    guideContextMenu.show = true
+    guideContextMenu.x = x
+    guideContextMenu.y = y
+    guideContextMenu.guideId = guideId
+  }
+
+  function hideGuideContextMenu(): void {
+    guideContextMenu.show = false
+  }
 
   const isTransforming = ref(false)
   const activeFrameId = ref<string | null>(null)
@@ -156,6 +211,7 @@ export const useUiStore = defineStore('ui', () => {
   return {
     currentTool, selectedIds, selectedKeyframeIds, activePanel,
     panelWidths, showGrid, snapToGrid, gridSize, editorTheme,
+    guides, showRulers, guideContextMenu,
     isTransforming, activeFrameId,
     activeModal, contextMenu, pathEditMode, editingPathId, activeGroupId,
     setTool, select, addToSelection, toggleSelection, clearSelection, selectAll,
@@ -163,6 +219,8 @@ export const useUiStore = defineStore('ui', () => {
     setActivePanel, openModal, closeModal, setPanelWidth,
     toggleGrid, toggleSnap, toggleEditorTheme, enterPathEditMode, exitPathEditMode,
     setActiveFrame, enterGroup, exitGroup, showContextMenu, hideContextMenu,
-    setTransforming
+    setTransforming,
+    addGuide, updateGuidePosition, removeGuide, toggleGuideLock, clearGuides,
+    showGuideContextMenu, hideGuideContextMenu
   }
 })

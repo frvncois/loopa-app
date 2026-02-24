@@ -4,8 +4,12 @@ import { ref, watchEffect, onMounted, onUnmounted, nextTick } from 'vue'
 const props = defineProps<{
   direction: 'horizontal' | 'vertical'
   zoom: number
-  panX?: number
-  panY?: number
+  unit: 'px' | '%'
+  artboardLength: number
+}>()
+
+const emit = defineEmits<{
+  dragstart: [e: MouseEvent]
 }>()
 
 const canvasEl = ref<HTMLCanvasElement | null>(null)
@@ -17,6 +21,14 @@ function getTickInterval(zoom: number): { minor: number; major: number } {
   if (zoom < 2)    return { minor: 25,  major: 100 }
   if (zoom < 4)    return { minor: 10,  major: 50 }
   return { minor: 5, major: 25 }
+}
+
+function formatLabel(coord: number): string {
+  if (props.unit === '%') {
+    const pct = props.artboardLength > 0 ? Math.round(coord / props.artboardLength * 100) : 0
+    return pct + '%'
+  }
+  return String(coord)
 }
 
 function draw() {
@@ -33,15 +45,14 @@ function draw() {
   cv.width  = cssW * dpr
   cv.height = cssH * dpr
   ctx.scale(dpr, dpr)
-
   ctx.clearRect(0, 0, cssW, cssH)
 
   // Background
-  ctx.fillStyle = getComputedStyle(cv).getPropertyValue('--bg-1').trim() || '#0c0c0f'
+  const bgColor = getComputedStyle(cv).getPropertyValue('--bg-2').trim() || '#17171b'
+  ctx.fillStyle = bgColor
   ctx.fillRect(0, 0, cssW, cssH)
 
   const { minor, major } = getTickInterval(props.zoom)
-  const pan    = props.direction === 'horizontal' ? (props.panX ?? 0) : (props.panY ?? 0)
   const length = props.direction === 'horizontal' ? cssW : cssH
   const thick  = props.direction === 'horizontal' ? cssH : cssW
 
@@ -51,11 +62,11 @@ function draw() {
   ctx.font        = `9px "JetBrains Mono", monospace`
   ctx.lineWidth   = 1
 
-  const startCoord = Math.floor((-pan / props.zoom) / minor) * minor
-  const endCoord   = Math.ceil(((length - pan) / props.zoom) / minor) * minor
+  // Ticks start at 0 (artboard origin) — ruler width = artboard × zoom
+  const endCoord = Math.ceil((length / props.zoom) / minor) * minor
 
-  for (let coord = startCoord; coord <= endCoord; coord += minor) {
-    const pos = Math.round(coord * props.zoom + pan) + 0.5
+  for (let coord = 0; coord <= endCoord; coord += minor) {
+    const pos = Math.round(coord * props.zoom) + 0.5
     if (pos < -1 || pos > length + 1) continue
 
     const isMajor = coord % major === 0
@@ -72,7 +83,7 @@ function draw() {
     ctx.stroke()
 
     if (isMajor) {
-      const label = String(coord)
+      const label = formatLabel(coord)
       ctx.save()
       if (props.direction === 'horizontal') {
         ctx.fillText(label, pos + 2, thick - 9)
@@ -84,6 +95,24 @@ function draw() {
       ctx.restore()
     }
   }
+
+  // Border line along the artboard edge
+  ctx.strokeStyle = '#3a3a4a'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  if (props.direction === 'horizontal') {
+    ctx.moveTo(0, cssH - 0.5)
+    ctx.lineTo(cssW, cssH - 0.5)
+  } else {
+    ctx.moveTo(0.5, 0)
+    ctx.lineTo(0.5, cssH)
+  }
+  ctx.stroke()
+}
+
+function onMouseDown(e: MouseEvent) {
+  if (e.button !== 0) return
+  emit('dragstart', e)
 }
 
 let ro: ResizeObserver | null = null
@@ -91,7 +120,6 @@ let ro: ResizeObserver | null = null
 onMounted(() => {
   ro = new ResizeObserver(() => draw())
   if (canvasEl.value) ro.observe(canvasEl.value)
-  // Ensure draw happens after browser layout is complete
   nextTick(() => draw())
 })
 
@@ -103,30 +131,22 @@ watchEffect(draw, { flush: 'post' })
 </script>
 
 <template>
-  <canvas ref="canvasEl" class="ruler" :class="direction === 'horizontal' ? 'is-horizontal' : 'is-vertical'" />
+  <canvas
+    ref="canvasEl"
+    class="ruler"
+    :class="direction === 'horizontal' ? 'is-horizontal' : 'is-vertical'"
+    @mousedown="onMouseDown"
+  />
 </template>
 
 <style scoped>
 .ruler {
   display: block;
-  position: absolute;
-  z-index: 5;
-  pointer-events: none;
+  width: 100%;
+  height: 100%;
+  cursor: default;
 
-  &.is-horizontal {
-    top: 0;
-    left: 1.25rem;
-    right: 0;
-    height: 1.25rem;
-    border-bottom: 1px solid var(--border);
-  }
-
-  &.is-vertical {
-    top: 1.25rem;
-    left: 0;
-    bottom: 0;
-    width: 1.25rem;
-    border-right: 1px solid var(--border);
-  }
+  &.is-horizontal { cursor: s-resize; }
+  &.is-vertical { cursor: e-resize; }
 }
 </style>

@@ -122,7 +122,7 @@ function wireHistory() {
       if (name === 'updateElement' || name === 'updateKeyframe' || name === 'updateMotionPath') {
         history.saveDebounced()
       } else if (['addElement', 'deleteElements', 'reorderElement',
-                  'addKeyframe', 'deleteKeyframe', 'deleteKeyframesForElement',
+                  'addKeyframe', 'deleteKeyframe', 'deleteKeyframes', 'deleteKeyframesForElement',
                   'duplicateElements', 'groupElements', 'ungroupElements',
                   'addMotionPath', 'deleteMotionPath'].includes(name)) {
         history.save()

@@ -167,13 +167,17 @@ export const useEditorStore = defineStore('editor', () => {
     const newFrameId = generateId('frame')
     const idMap = new Map<string, string>()
 
-    // Clone elements
+    // Pass 1: Build the full ID map for ALL elements first
+    for (const elId of frame.elements) {
+      idMap.set(elId, generateId('el'))
+    }
+
+    // Pass 2: Clone elements using the complete map
     const newElementIds: string[] = []
     for (const elId of frame.elements) {
       const el = elements.value.find(e => e.id === elId)
       if (!el) continue
-      const newId = generateId('el')
-      idMap.set(elId, newId)
+      const newId = idMap.get(elId)!
       newElementIds.push(newId)
       const cloned = JSON.parse(JSON.stringify(el)) as Element
       cloned.id = newId
@@ -410,6 +414,11 @@ export const useEditorStore = defineStore('editor', () => {
     keyframes.value = keyframes.value.filter(kf => kf.id !== id)
   }
 
+  function deleteKeyframes(ids: string[]): void {
+    const idSet = new Set(ids)
+    keyframes.value = keyframes.value.filter(kf => !idSet.has(kf.id))
+  }
+
   function deleteKeyframesForElement(elementId: string): void {
     keyframes.value = keyframes.value.filter(kf => kf.elementId !== elementId)
   }
@@ -446,7 +455,7 @@ export const useEditorStore = defineStore('editor', () => {
     addFrame, deleteFrame, updateFrame, duplicateFrame, reorderFrame, moveElementsToFrame,
     addElement, updateElement, deleteElements, reorderElement,
     duplicateElements, groupElements, ungroupElements,
-    addKeyframe, updateKeyframe, deleteKeyframe, deleteKeyframesForElement,
+    addKeyframe, updateKeyframe, deleteKeyframe, deleteKeyframes, deleteKeyframesForElement,
     addMotionPath, updateMotionPath, deleteMotionPath, getMotionPathForElement,
   }
 })

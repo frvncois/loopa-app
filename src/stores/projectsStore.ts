@@ -134,9 +134,8 @@ export const useProjectsStore = defineStore('projects', () => {
     const elementMap = new Map((data.elements ?? []).map((e: any) => [e.id, e]))
     for (const mp of (data.motionPaths ?? []) as any[]) {
       if (!mp.points?.length) continue
-      const first = mp.points[0]
-      // If first point is near origin (0,0), it's already relative — skip
-      if (Math.hypot(first.x, first.y) <= 10) continue
+      // Skip already-migrated paths (flag set by previous migration)
+      if (mp._relativePoints) continue
       const el = elementMap.get(mp.elementId)
       if (!el) continue
       // Subtract element center from all point positions (handles stay relative to their point)
@@ -147,6 +146,7 @@ export const useProjectsStore = defineStore('projects', () => {
         pt.y -= cy
       }
       mp.d = pointsToSvgPath(mp.points)
+      mp._relativePoints = true
     }
     return data
   }

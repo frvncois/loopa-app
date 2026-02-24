@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useTimelineStore } from '@/stores/timelineStore'
-import { getVideo } from '@/lib/utils/videoStorage'
+import { getVideo, saveVideo, getMediaFromCloud } from '@/lib/utils/videoStorage'
+import { supabase } from '@/lib/supabase'
 import type { VideoElement } from '@/types/elements'
 
 const props = defineProps<{ element: VideoElement }>()
@@ -89,7 +90,18 @@ watch(
 
 onMounted(async () => {
   try {
-    const blob = await getVideo(props.element.videoStorageId)
+    // Try local IndexedDB first (fast, works offline)
+    let blob = await getVideo(props.element.videoStorageId)
+
+    // Fallback: download from Supabase Storage (cross-device, after cloud upload)
+    if (!blob) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        blob = await getMediaFromCloud(user.id, props.element.videoStorageId)
+        if (blob) await saveVideo(props.element.videoStorageId, blob) // cache locally
+      }
+    }
+
     if (blob) {
       blobUrl.value = URL.createObjectURL(blob)
     } else {

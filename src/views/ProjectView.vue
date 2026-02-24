@@ -151,9 +151,9 @@ watch(() => ui.selectedIds, () => {
 })
 
 // ── Load project ──────────────────────────────────────────────
-onMounted(() => {
-  projects.loadAllProjects()
-  const data = projects.loadProjectData(props.id)
+onMounted(async () => {
+  await projects.loadAllProjects()
+  const data = await projects.loadProjectData(props.id)
   if (!data) {
     router.push('/')
     return
@@ -288,13 +288,14 @@ watch(
   { deep: true }
 )
 
-function save() {
+async function save() {
   if (!editor.projectId) return
-  const existing = projects.loadProjectData(editor.projectId)
-  if (!existing) return
-  // Keep meta artboard dims in sync with first frame, and regenerate thumbnail
+  const meta = projects.projects.find(p => p.id === editor.projectId)
+  if (!meta) return
+
+  // Keep artboard dims in sync with first frame + regenerate thumbnail
   const firstFrame = editor.frames.find(f => f.order === 0)
-  let updatedMeta = existing.meta
+  let updatedMeta = { ...meta }
   if (firstFrame) {
     const thumbnail = generateThumbnail(
       editor.getElementsForFrame(firstFrame.id),
@@ -303,14 +304,14 @@ function save() {
       firstFrame.backgroundColor
     )
     updatedMeta = {
-      ...existing.meta,
+      ...meta,
       artboardWidth: firstFrame.width,
       artboardHeight: firstFrame.height,
       thumbnail,
     }
   }
-  projects.saveProjectData(editor.projectId, {
-    ...existing,
+
+  await projects.saveProjectData(editor.projectId, {
     meta: updatedMeta,
     frames: editor.frames,
     elements: editor.elements,

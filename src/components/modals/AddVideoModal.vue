@@ -3,7 +3,8 @@ import { ref } from 'vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUiStore } from '@/stores/uiStore'
-import { saveVideo } from '@/lib/utils/videoStorage'
+import { saveVideo, uploadMediaToCloud } from '@/lib/utils/videoStorage'
+import { supabase } from '@/lib/supabase'
 import { generateId } from '@/lib/utils/id'
 import type { VideoElement } from '@/types/elements'
 
@@ -72,7 +73,13 @@ async function addVideo() {
   adding.value = true
   try {
     const storageId = generateId('vid')
-    await saveVideo(storageId, videoFile.value)
+    const file = videoFile.value
+    await saveVideo(storageId, file)
+
+    // Background cloud upload — doesn't block UI
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) uploadMediaToCloud(user.id, storageId, file).catch(() => {})
+    })
 
     const frameId = ui.activeFrameId
     const frame = frameId ? editor.frames.find(f => f.id === frameId) : null
@@ -204,7 +211,7 @@ function closeAndReset() {
           <line x1="8" y1="7" x2="8" y2="11"/>
           <circle cx="8" cy="5" r="0.75" fill="currentColor" stroke="none"/>
         </svg>
-        Videos are stored locally in your browser and never uploaded to any server.
+        Videos are stored securely in your account and synced across devices.
       </div>
 
     </div>

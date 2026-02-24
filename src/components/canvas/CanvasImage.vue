@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { getImageBlob } from '@/lib/utils/videoStorage'
+import { getImageBlob, storeImage, getMediaFromCloud } from '@/lib/utils/videoStorage'
+import { supabase } from '@/lib/supabase'
 import type { ImageElement } from '@/types/elements'
 
 const props = defineProps<{ element: ImageElement }>()
@@ -10,7 +11,18 @@ const missing = ref(false)
 
 onMounted(async () => {
   try {
-    const blob = await getImageBlob(props.element.imageStorageId)
+    // Try local IndexedDB first (fast, works offline)
+    let blob = await getImageBlob(props.element.imageStorageId)
+
+    // Fallback: download from Supabase Storage (cross-device, after cloud upload)
+    if (!blob) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        blob = await getMediaFromCloud(user.id, props.element.imageStorageId)
+        if (blob) await storeImage(props.element.imageStorageId, blob) // cache locally
+      }
+    }
+
     if (blob) {
       blobUrl.value = URL.createObjectURL(blob)
     } else {

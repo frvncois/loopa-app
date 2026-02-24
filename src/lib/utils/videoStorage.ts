@@ -97,3 +97,35 @@ export function blobToDataUrl(blob: Blob): Promise<string> {
     reader.readAsDataURL(blob)
   })
 }
+
+// ── Supabase Storage (cloud backup / cross-device sync) ───────────────────────
+// Bucket: project-media (private, RLS: auth.uid()::text = foldername(name)[1])
+// Path:   {userId}/{storageId}
+
+const CLOUD_BUCKET = 'project-media'
+
+/** Upload a media blob to Supabase Storage. Silently ignored if not authenticated. */
+export async function uploadMediaToCloud(
+  userId: string,
+  storageId: string,
+  blob: Blob
+): Promise<void> {
+  const { supabase } = await import('@/lib/supabase')
+  const { error } = await supabase.storage
+    .from(CLOUD_BUCKET)
+    .upload(`${userId}/${storageId}`, blob, { upsert: true })
+  if (error) throw error
+}
+
+/** Download a media blob from Supabase Storage. Returns null if not found. */
+export async function getMediaFromCloud(
+  userId: string,
+  storageId: string
+): Promise<Blob | null> {
+  const { supabase } = await import('@/lib/supabase')
+  const { data, error } = await supabase.storage
+    .from(CLOUD_BUCKET)
+    .download(`${userId}/${storageId}`)
+  if (error || !data) return null
+  return data
+}

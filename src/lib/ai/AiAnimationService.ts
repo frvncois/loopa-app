@@ -1,7 +1,8 @@
 /**
- * AiAnimationService — calls OpenAI to generate animation commands.
- * API key is read from VITE_OPENAI_API_KEY in .env.local; never hardcoded.
+ * AiAnimationService — proxies OpenAI via Supabase Edge Function.
+ * The OpenAI key lives in Supabase secrets (OPENAI_API_KEY), never in the client bundle.
  */
+import { supabase } from '@/lib/supabase'
 
 export interface AiCommand {
   action: 'addKeyframe' | 'updateElement' | 'updateTimeline'
@@ -132,38 +133,19 @@ export async function askAiAnimator(
   projectContext: ProjectContext,
   conversationHistory: { role: string; content: string }[]
 ): Promise<AiResponse> {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY as string | undefined
-  if (!apiKey) {
-    throw new Error('OPENAI_KEY_MISSING')
-  }
-
   const messages = [
     { role: 'system', content: buildSystemPrompt(projectContext) },
     ...conversationHistory,
     { role: 'user', content: userMessage },
   ]
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages,
-      temperature: 0.3,
-      response_format: { type: 'json_object' },
-    }),
+  const { data, error } = await supabase.functions.invoke('ai', {
+    body: { messages },
   })
 
-  if (!response.ok) {
-    const errText = await response.text()
-    throw new Error(`OpenAI API error ${response.status}: ${errText}`)
-  }
+  if (error) throw new Error(error.message)
 
-  const data = await response.json()
-  const content: string = data.choices?.[0]?.message?.content ?? '{}'
+  const content: string = data?.choices?.[0]?.message?.content ?? '{}'
 
   try {
     const parsed = JSON.parse(content) as AiResponse

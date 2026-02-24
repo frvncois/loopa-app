@@ -24,20 +24,20 @@ const deleteTarget = ref<string | null>(null)
 
 onMounted(() => projects.loadAllProjects())
 
-function onCreate(name: string, w: number, h: number) {
-  const id = projects.createProject(name, w, h)
+async function onCreate(name: string, w: number, h: number) {
+  const id = await projects.createProject(name, w, h)
   showNew.value = false
   router.push(`/project/${id}`)
 }
 
-function onCreateFromFigma(name: string, frames: Frame[], elements: Element[]) {
-  const id = projects.createProjectWithFrames(name, frames, elements)
+async function onCreateFromFigma(name: string, frames: Frame[], elements: Element[]) {
+  const id = await projects.createProjectWithFrames(name, frames, elements)
   showNew.value = false
   router.push(`/project/${id}`)
 }
 
-function onDelete(id: string) {
-  projects.deleteProject(id)
+async function onDelete(id: string) {
+  await projects.deleteProject(id)
   deleteTarget.value = null
 }
 

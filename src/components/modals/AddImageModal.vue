@@ -3,7 +3,8 @@ import { ref } from 'vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUiStore } from '@/stores/uiStore'
-import { storeImage } from '@/lib/utils/videoStorage'
+import { storeImage, uploadMediaToCloud } from '@/lib/utils/videoStorage'
+import { supabase } from '@/lib/supabase'
 import { generateId } from '@/lib/utils/id'
 import type { ImageElement } from '@/types/elements'
 
@@ -71,7 +72,13 @@ async function addImage() {
   adding.value = true
   try {
     const storageId = generateId('img')
-    await storeImage(storageId, imageFile.value)
+    const file = imageFile.value
+    await storeImage(storageId, file)
+
+    // Background cloud upload — doesn't block UI
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) uploadMediaToCloud(user.id, storageId, file).catch(() => {})
+    })
 
     const frameId = ui.activeFrameId
     const frame = frameId ? editor.frames.find(f => f.id === frameId) : null
@@ -199,7 +206,7 @@ function closeAndReset() {
           <line x1="8" y1="7" x2="8" y2="11"/>
           <circle cx="8" cy="5" r="0.75" fill="currentColor" stroke="none"/>
         </svg>
-        Images are stored locally in your browser and never uploaded to any server.
+        Images are stored securely in your account and synced across devices.
       </div>
 
     </div>

@@ -35,6 +35,9 @@ export const useUiStore = defineStore('ui', () => {
   const showGrid = ref(false)
   const snapToGrid = ref(false)
   const gridSize = ref(10)
+  const editorTheme = ref<'dark' | 'light'>(
+    (localStorage.getItem('loopa_editor_theme') as 'dark' | 'light') || 'dark'
+  )
 
   const isTransforming = ref(false)
   const activeFrameId = ref<string | null>(null)
@@ -105,6 +108,10 @@ export const useUiStore = defineStore('ui', () => {
 
   function toggleGrid(): void { showGrid.value = !showGrid.value }
   function toggleSnap(): void { snapToGrid.value = !snapToGrid.value }
+  function toggleEditorTheme(): void {
+    editorTheme.value = editorTheme.value === 'dark' ? 'light' : 'dark'
+    localStorage.setItem('loopa_editor_theme', editorTheme.value)
+  }
 
   function enterPathEditMode(pathId: string): void {
     pathEditMode.value = true
@@ -148,13 +155,13 @@ export const useUiStore = defineStore('ui', () => {
 
   return {
     currentTool, selectedIds, selectedKeyframeIds, activePanel,
-    panelWidths, showGrid, snapToGrid, gridSize,
+    panelWidths, showGrid, snapToGrid, gridSize, editorTheme,
     isTransforming, activeFrameId,
     activeModal, contextMenu, pathEditMode, editingPathId, activeGroupId,
     setTool, select, addToSelection, toggleSelection, clearSelection, selectAll,
     selectKeyframe, selectKeyframes, clearKeyframeSelection,
     setActivePanel, openModal, closeModal, setPanelWidth,
-    toggleGrid, toggleSnap, enterPathEditMode, exitPathEditMode,
+    toggleGrid, toggleSnap, toggleEditorTheme, enterPathEditMode, exitPathEditMode,
     setActiveFrame, enterGroup, exitGroup, showContextMenu, hideContextMenu,
     setTransforming
   }

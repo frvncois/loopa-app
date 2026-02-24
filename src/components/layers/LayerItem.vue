@@ -2,7 +2,6 @@
 import type { Component } from 'vue'
 import type { Element } from '@/types/elements'
 import IconRect from '@/components/icons/IconRect.vue'
-import IconCircle from '@/components/icons/IconCircle.vue'
 import IconEllipse from '@/components/icons/IconEllipse.vue'
 import IconLine from '@/components/icons/IconLine.vue'
 import IconPolygon from '@/components/icons/IconPolygon.vue'
@@ -34,7 +33,6 @@ const emit = defineEmits<{
 
 const ICONS: Record<string, Component> = {
   rect: IconRect,
-  circle: IconCircle,
   ellipse: IconEllipse,
   line: IconLine,
   polygon: IconPolygon,

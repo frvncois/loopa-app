@@ -43,7 +43,6 @@ function releaseMask() {
   <div v-if="isMaskGroup || isMaskShape" class="section">
     <!-- Mask group selected -->
     <template v-if="isMaskGroup">
-      <div class="title">Mask Group</div>
       <div class="row">
         <span class="label">Clips</span>
         <span class="value">{{ clippedCount }} layer{{ clippedCount !== 1 ? 's' : '' }}</span>
@@ -55,7 +54,6 @@ function releaseMask() {
 
     <!-- Mask shape (first child of mask group) -->
     <template v-else-if="isMaskShape">
-      <div class="title">Mask Shape</div>
       <div class="row">
         <span class="label">Role</span>
         <span class="value">Clipping shape</span>
@@ -66,14 +64,7 @@ function releaseMask() {
 
 <style scoped>
 .section {
-  padding: 0.625rem 0.75rem;
-  border-bottom: 1px solid var(--border);
-}
-.title {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: var(--text-2);
-  margin-bottom: 0.375rem;
+  padding: 0.375rem 0.75rem 0.625rem;
 }
 .row {
   display: flex;

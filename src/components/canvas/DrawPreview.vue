@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { useUiStore } from '@/stores/uiStore'
-
 defineProps<{
   x: number
   y: number
@@ -8,8 +6,6 @@ defineProps<{
   height: number
   visible: boolean
 }>()
-
-const ui = useUiStore()
 </script>
 
 <template>
@@ -20,7 +16,7 @@ const ui = useUiStore()
     :width="Math.max(width, 1)"
     :height="Math.max(height, 1)"
     class="draw-preview"
-    :rx="ui.currentTool === 'circle' ? Math.min(width, height) / 2 : 0"
+    :rx="0"
   />
 </template>
 

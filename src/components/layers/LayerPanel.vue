@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, inject, nextTick } from 'vue'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useTimelineStore } from '@/stores/timelineStore'
@@ -109,6 +109,51 @@ function toggleVis(id: string) {
   if (el) editor.updateElement(id, { visible: !el.visible })
 }
 
+// ── Inline rename ─────────────────────────────────────────────
+type HistoryHandle = { save: () => void }
+const history = inject<HistoryHandle>('history')
+
+const editingId    = ref<string | null>(null)
+const renameValue  = ref('')
+const originalName = ref('')
+
+async function startRename(id: string, currentName: string, e: MouseEvent) {
+  e.stopPropagation()
+  editingId.value    = id
+  renameValue.value  = currentName
+  originalName.value = currentName
+  await nextTick()
+  document.querySelector<HTMLInputElement>('.rename-input')?.select()
+}
+
+function commitRename(id: string) {
+  // Guard: only commit if this id is still being edited
+  if (!editingId.value || editingId.value !== id) return
+
+  const trimmed = renameValue.value.trim()
+  const orig    = originalName.value  // capture before clearing
+
+  // Null editingId FIRST so that the blur fired by DOM removal doesn't re-enter
+  editingId.value    = null
+  renameValue.value  = ''
+  originalName.value = ''
+
+  if (trimmed && trimmed !== orig) {
+    if (editor.frames.find(f => f.id === id)) {
+      editor.updateFrame(id, { name: trimmed })
+    } else {
+      editor.updateElement(id, { name: trimmed })
+    }
+    history?.save()
+  }
+}
+
+function cancelRename() {
+  editingId.value    = null
+  renameValue.value  = ''
+  originalName.value = ''
+}
+
 // ── Drag-to-reorder ───────────────────────────────────────────
 const draggingId = ref<string | null>(null)
 const dragOverId = ref<string | null>(null)
@@ -170,7 +215,6 @@ const layerTree = computed<LayerTreeItem[]>(() => {
 // ── Type icons (inline SVG strings, v-html safe — hardcoded) ──
 const TYPE_ICONS: Record<string, string> = {
   rect:    `<svg viewBox="0 0 12 12" width="10" height="10" fill="none"><rect x="1.5" y="1.5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1"/></svg>`,
-  circle:  `<svg viewBox="0 0 12 12" width="10" height="10" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1"/></svg>`,
   ellipse: `<svg viewBox="0 0 12 12" width="10" height="10" fill="none"><ellipse cx="6" cy="6" rx="5" ry="3" stroke="currentColor" stroke-width="1"/></svg>`,
   text:    `<svg viewBox="0 0 12 12" width="10" height="10" fill="none"><path d="M2 3h8M6 3v6M4 9h4" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>`,
   path:    `<svg viewBox="0 0 12 12" width="10" height="10" fill="none"><path d="M2 9C3 6 5 3 6 3C7 3 9 6 10 9" stroke="currentColor" stroke-width="1" stroke-linecap="round" fill="none"/></svg>`,
@@ -222,7 +266,24 @@ function typeIcon(elType: string): string {
           <svg class="frame-icon" viewBox="0 0 12 12" width="10" height="10" fill="none">
             <rect x="1.5" y="1.5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1"/>
           </svg>
-          <span class="frame-name">{{ editor.frames.find(f => f.id === item.id)?.name }}</span>
+          <span
+            v-if="editingId !== item.id"
+            class="frame-name"
+            @dblclick.stop="startRename(item.id, editor.frames.find(f => f.id === item.id)?.name ?? '', $event)"
+          >{{ editor.frames.find(f => f.id === item.id)?.name }}</span>
+          <input
+            v-else
+            class="rename-input"
+
+            v-model="renameValue"
+            @blur="commitRename(item.id)"
+            @keydown.enter.stop="commitRename(item.id)"
+            @keydown.escape.stop="cancelRename"
+            @keydown.stop
+            @click.stop
+            @dblclick.stop
+            @mousedown.stop
+          />
           <span class="frame-dims">
             {{ editor.frames.find(f => f.id === item.id)?.width }}×{{ editor.frames.find(f => f.id === item.id)?.height }}
           </span>
@@ -301,7 +362,24 @@ function typeIcon(elType: string): string {
           />
 
           <!-- Layer name -->
-          <span class="el-name">{{ editor.getElementById(item.id)?.name }}</span>
+          <span
+            v-if="editingId !== item.id"
+            class="el-name"
+            @dblclick.stop="startRename(item.id, editor.getElementById(item.id)?.name ?? '', $event)"
+          >{{ editor.getElementById(item.id)?.name }}</span>
+          <input
+            v-else
+            class="rename-input"
+
+            v-model="renameValue"
+            @blur="commitRename(item.id)"
+            @keydown.enter.stop="commitRename(item.id)"
+            @keydown.escape.stop="cancelRename"
+            @keydown.stop
+            @click.stop
+            @dblclick.stop
+            @mousedown.stop
+          />
 
           <!-- Animated indicator dot -->
           <span v-if="isAnimated(item.id)" class="anim-dot" title="Has keyframes" />
@@ -585,6 +663,20 @@ function typeIcon(elType: string): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+}
+
+.rename-input {
+  flex: 1;
+  height: 1.25rem;
+  background: var(--bg-4);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+  color: var(--text-1);
+  font-size: 0.6875rem;
+  font-family: var(--font);
+  padding: 0 0.25rem;
+  outline: none;
   min-width: 0;
 }
 

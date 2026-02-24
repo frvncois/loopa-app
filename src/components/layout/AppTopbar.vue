@@ -122,6 +122,25 @@ function finishEditName() {
 
     <div class="divider" />
 
+    <!-- Theme toggle -->
+    <button
+      class="button is-ghost is-icon is-sm"
+      :title="uiStore.editorTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+      @click="uiStore.toggleEditorTheme()"
+    >
+      <!-- Sun icon (shown in dark mode) -->
+      <svg v-if="uiStore.editorTheme === 'dark'" width="12" height="12" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.22 3.22l1.41 1.41M11.36 11.36l1.42 1.42M3.22 12.78l1.41-1.41M11.36 4.64l1.42-1.42" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <!-- Moon icon (shown in light mode) -->
+      <svg v-else width="12" height="12" viewBox="0 0 16 16" fill="none">
+        <path d="M13.5 10.5A6 6 0 0 1 5.5 2.5a6 6 0 1 0 8 8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
+    <div class="divider" />
+
     <!-- Export accent button -->
     <button class="button is-accent is-sm" @click="uiStore.openModal('export')">
       <IconDownload />

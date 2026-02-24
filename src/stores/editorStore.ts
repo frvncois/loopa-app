@@ -3,15 +3,17 @@ import { ref, computed } from 'vue'
 import type { Element, GroupElement } from '@/types/elements'
 import type { Frame } from '@/types/frame'
 import type { Keyframe } from '@/types/animation'
+import type { MotionPath } from '@/types/motionPath'
 import type { ProjectData } from '@/types/project'
 import { generateId } from '@/lib/utils/id'
 import { createGroup } from '@/lib/elements/ElementFactory'
 
 export const useEditorStore = defineStore('editor', () => {
-  const projectId = ref<string | null>(null)
-  const frames    = ref<Frame[]>([])
-  const elements  = ref<Element[]>([])
-  const keyframes = ref<Keyframe[]>([])
+  const projectId   = ref<string | null>(null)
+  const frames      = ref<Frame[]>([])
+  const elements    = ref<Element[]>([])
+  const keyframes   = ref<Keyframe[]>([])
+  const motionPaths = ref<MotionPath[]>([])
 
   // ── Element getters ──────────────────────────────────────────
 
@@ -91,15 +93,17 @@ export const useEditorStore = defineStore('editor', () => {
       frames.value = data.frames
     }
 
-    elements.value  = data.elements
-    keyframes.value = data.keyframes
+    elements.value    = data.elements
+    keyframes.value   = data.keyframes
+    motionPaths.value = data.motionPaths ?? []
   }
 
   function clearProject(): void {
-    projectId.value = null
-    frames.value    = []
-    elements.value  = []
-    keyframes.value = []
+    projectId.value   = null
+    frames.value      = []
+    elements.value    = []
+    keyframes.value   = []
+    motionPaths.value = []
   }
 
   // ── Frame CRUD ────────────────────────────────────────────────
@@ -143,9 +147,10 @@ export const useEditorStore = defineStore('editor', () => {
     if (imageStorageIds.length > 0) {
       import('@/lib/utils/videoStorage').then(m => m.deleteMediaBulk(imageStorageIds)).catch(() => {})
     }
-    elements.value  = elements.value.filter(el => !ids.has(el.id))
-    keyframes.value = keyframes.value.filter(kf => !ids.has(kf.elementId))
-    frames.value    = frames.value.filter(f => f.id !== frameId)
+    elements.value    = elements.value.filter(el => !ids.has(el.id))
+    keyframes.value   = keyframes.value.filter(kf => !ids.has(kf.elementId))
+    motionPaths.value = motionPaths.value.filter(mp => !ids.has(mp.elementId))
+    frames.value      = frames.value.filter(f => f.id !== frameId)
     frames.value.forEach((f, i) => { f.order = i })
   }
 
@@ -296,7 +301,8 @@ export const useEditorStore = defineStore('editor', () => {
         return el
       })
       .filter(el => !allIds.has(el.id))
-    keyframes.value = keyframes.value.filter(kf => !allIds.has(kf.elementId))
+    keyframes.value   = keyframes.value.filter(kf => !allIds.has(kf.elementId))
+    motionPaths.value = motionPaths.value.filter(mp => !allIds.has(mp.elementId))
   }
 
   function reorderElement(id: string, newIndex: number): void {
@@ -408,8 +414,31 @@ export const useEditorStore = defineStore('editor', () => {
     keyframes.value = keyframes.value.filter(kf => kf.elementId !== elementId)
   }
 
+  // ── Motion path actions ───────────────────────────────────────
+
+  function addMotionPath(mp: MotionPath): void {
+    // Only one motion path per element — replace if exists
+    motionPaths.value = motionPaths.value.filter(m => m.elementId !== mp.elementId)
+    motionPaths.value.push(mp)
+  }
+
+  function updateMotionPath(id: string, updates: Partial<MotionPath>): void {
+    const idx = motionPaths.value.findIndex(mp => mp.id === id)
+    if (idx !== -1) {
+      motionPaths.value[idx] = { ...motionPaths.value[idx], ...updates }
+    }
+  }
+
+  function deleteMotionPath(id: string): void {
+    motionPaths.value = motionPaths.value.filter(mp => mp.id !== id)
+  }
+
+  function getMotionPathForElement(elementId: string): MotionPath | null {
+    return motionPaths.value.find(mp => mp.elementId === elementId) ?? null
+  }
+
   return {
-    projectId, frames, elements, keyframes,
+    projectId, frames, elements, keyframes, motionPaths,
     getElementById, getElementsByIds, getKeyframesForElement,
     childToGroupMap, topLevelElements,
     getElementsForFrame, getKeyframesForFrame, getTopLevelElementsForFrame,
@@ -418,5 +447,6 @@ export const useEditorStore = defineStore('editor', () => {
     addElement, updateElement, deleteElements, reorderElement,
     duplicateElements, groupElements, ungroupElements,
     addKeyframe, updateKeyframe, deleteKeyframe, deleteKeyframesForElement,
+    addMotionPath, updateMotionPath, deleteMotionPath, getMotionPathForElement,
   }
 })

@@ -3,7 +3,37 @@ import type { Element } from '@/types/elements'
 import { getEasingFn } from './Easing'
 import { interpolateNumber, interpolateColor } from './Interpolator'
 
-const COLOR_PROPS = new Set<keyof AnimatableProps>(['fillColor', 'strokeColor'])
+const COLOR_PROPS = new Set<keyof AnimatableProps>(['fillColor', 'strokeColor', 'shadowColor'])
+const PATH_PROPS  = new Set<keyof AnimatableProps>(['d'])
+
+// ── Path morphing helpers ─────────────────────────────────────────────────────
+
+function extractPathNumbers(d: string): number[] {
+  const nums: number[] = []
+  const regex = /-?\d+\.?\d*(?:e[+-]?\d+)?/gi
+  let match
+  while ((match = regex.exec(d)) !== null) nums.push(parseFloat(match[0]))
+  return nums
+}
+
+function replacePathNumbers(d: string, nums: number[]): string {
+  let idx = 0
+  return d.replace(/-?\d+\.?\d*(?:e[+-]?\d+)?/gi, () => {
+    const val = nums[idx++]
+    return (Math.round(val * 100) / 100).toString()
+  })
+}
+
+function interpolatePath(fromD: string, toD: string, t: number): string {
+  const fromNums = extractPathNumbers(fromD)
+  const toNums   = extractPathNumbers(toD)
+  // Different structure → snap at midpoint (can't morph)
+  if (fromNums.length !== toNums.length) return t < 0.5 ? fromD : toD
+  const result = fromNums.map((fv, i) => fv + (toNums[i] - fv) * t)
+  return replacePathNumbers(fromD, result)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function interpolateProp(
   key: keyof AnimatableProps,
@@ -16,8 +46,9 @@ function interpolateProp(
   if (typeof a === 'number' && typeof b === 'number') {
     return interpolateNumber(a, b, t) as AnimatableProps[typeof key]
   }
-  if (typeof a === 'string' && typeof b === 'string' && COLOR_PROPS.has(key)) {
-    return interpolateColor(a, b, t) as AnimatableProps[typeof key]
+  if (typeof a === 'string' && typeof b === 'string') {
+    if (COLOR_PROPS.has(key)) return interpolateColor(a, b, t) as AnimatableProps[typeof key]
+    if (PATH_PROPS.has(key))  return interpolatePath(a, b, t)  as AnimatableProps[typeof key]
   }
   // Non-interpolatable: snap at t >= 1
   return t < 1 ? a : b

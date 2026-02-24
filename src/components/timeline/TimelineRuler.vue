@@ -43,8 +43,8 @@ const marks = computed(() => getRulerMarks(props.totalFrames, props.pixelsPerFra
       <template v-if="m.major">
         <text
           :x="m.x" y="12"
-          fill="var(--text-4)"
-          font-size="8"
+          fill="var(--text-3)"
+          font-size="10"
           font-family="var(--mono)"
           text-anchor="middle"
         >{{ m.frame }}</text>

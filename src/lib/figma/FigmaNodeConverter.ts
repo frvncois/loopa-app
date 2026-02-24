@@ -14,7 +14,7 @@
 import { generateId } from '@/lib/utils/id'
 import { rgbToHex } from '@/lib/utils/color'
 import type {
-  Element, RectElement, CircleElement, EllipseElement,
+  Element, RectElement, EllipseElement,
   TextElement, PathElement, GroupElement, FillEntry, StrokeEntry, ShadowEntry
 } from '@/types/elements'
 import type { Frame } from '@/types/frame'
@@ -182,15 +182,11 @@ function convertRectangle(node: FigmaNode, warnings: ImportWarning[], offsetX: n
   }
 }
 
-function convertEllipse(node: FigmaNode, warnings: ImportWarning[], offsetX: number, offsetY: number): CircleElement | EllipseElement | null {
+function convertEllipse(node: FigmaNode, warnings: ImportWarning[], offsetX: number, offsetY: number): EllipseElement | null {
   const bbox = node.absoluteBoundingBox
   if (!bbox || bbox.width <= 0 || bbox.height <= 0) return null
 
-  const base = baseProps(node, warnings, bbox, offsetX, offsetY)
-  if (Math.abs(bbox.width - bbox.height) < 0.5) {
-    return { ...base, type: 'circle' }
-  }
-  return { ...base, type: 'ellipse' }
+  return { ...baseProps(node, warnings, bbox, offsetX, offsetY), type: 'ellipse' }
 }
 
 function convertText(node: FigmaNode, warnings: ImportWarning[], offsetX: number, offsetY: number): TextElement | null {

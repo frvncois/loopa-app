@@ -5,7 +5,7 @@ import type { useUiStore } from '@/stores/uiStore'
 import type { useCanvas } from '@/composables/useCanvas'
 import type { Element } from '@/types/elements'
 import type { AnimatableProps } from '@/types/animation'
-import { clamp } from '@/lib/utils/math'
+import { clamp, snapToGrid } from '@/lib/utils/math'
 
 type EditorStore = ReturnType<typeof useEditorStore>
 type UiStore = ReturnType<typeof useUiStore>
@@ -77,6 +77,28 @@ export function useElementResize(
     if (handle.includes('w')) { x   += localDx; width  = clamp(width  - localDx, 1, Infinity) }
     if (handle.includes('s')) height = clamp(height + localDy, 1, Infinity)
     if (handle.includes('n')) { y   += localDy; height = clamp(height - localDy, 1, Infinity) }
+
+    // Snap the moved edge to grid lines; the opposite edge stays fixed.
+    if (uiStore.snapToGrid) {
+      const originalRight  = startEl.x + startEl.width
+      const originalBottom = startEl.y + startEl.height
+      if (handle.includes('w')) {
+        x     = snapToGrid(x, uiStore.gridSize)
+        width = Math.max(1, originalRight - x)
+      }
+      if (handle.includes('e')) {
+        const snappedRight = snapToGrid(x + width, uiStore.gridSize)
+        width = Math.max(1, snappedRight - x)
+      }
+      if (handle.includes('n')) {
+        y      = snapToGrid(y, uiStore.gridSize)
+        height = Math.max(1, originalBottom - y)
+      }
+      if (handle.includes('s')) {
+        const snappedBottom = snapToGrid(y + height, uiStore.gridSize)
+        height = Math.max(1, snappedBottom - y)
+      }
+    }
 
     if (setAnimatedProp) {
       setAnimatedProp(targetId, { x, y, width, height })

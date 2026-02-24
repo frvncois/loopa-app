@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, inject } from 'vue'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useTimelineStore } from '@/stores/timelineStore'
+import type { useHistory } from '@/composables/useHistory'
 import type { Keyframe } from '@/types/animation'
 import type { Element } from '@/types/elements'
 import type { Component } from 'vue'
@@ -10,7 +11,6 @@ import TimelineRuler from './TimelineRuler.vue'
 import TimelineTrack from './TimelineTrack.vue'
 import TimelinePlayhead from './TimelinePlayhead.vue'
 import IconRect from '@/components/icons/IconRect.vue'
-import IconCircle from '@/components/icons/IconCircle.vue'
 import IconEllipse from '@/components/icons/IconEllipse.vue'
 import IconLine from '@/components/icons/IconLine.vue'
 import IconPen from '@/components/icons/IconPen.vue'
@@ -22,6 +22,7 @@ import IconVideo from '@/components/icons/IconVideo.vue'
 const editor = useEditorStore()
 const ui = useUiStore()
 const timeline = useTimelineStore()
+const history = inject<ReturnType<typeof useHistory>>('history')
 
 // Only top-level elements for the active frame
 const topLevelElements = computed(() =>
@@ -138,6 +139,66 @@ function onKeyframeMouseDown(kf: Keyframe, e: MouseEvent) {
     }
 
     dragState.value = null
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
+// ── Motion path bar drag (move + resize) ────────────────────────────────────
+
+function onMpBarMouseDown(
+  mpId: string,
+  mode: 'move' | 'resize-left' | 'resize-right',
+  e: MouseEvent
+) {
+  e.preventDefault()
+  const mp = editor.motionPaths.find(m => m.id === mpId)
+  if (!mp) return
+
+  const origStart  = mp.startFrame
+  const origEnd    = mp.endFrame
+  const startMouseX = e.clientX
+  const duration   = origEnd - origStart
+
+  function onMove(ev: MouseEvent) {
+    const target = editor.motionPaths.find(m => m.id === mpId)
+    if (!target) return
+
+    const dx = ev.clientX - startMouseX
+    const frameDelta = Math.round(dx / PX_PER_FRAME)
+    const cf = Math.round(timeline.currentFrame)
+
+    if (mode === 'move') {
+      let newStart = origStart + frameDelta
+      let newEnd   = origEnd   + frameDelta
+
+      // Clamp to timeline bounds
+      if (newStart < 0)                      { newStart = 0;                          newEnd = duration }
+      if (newEnd   > timeline.totalFrames)   { newEnd   = timeline.totalFrames;       newStart = newEnd - duration }
+
+      // Snap start or end to playhead (within 2 frames)
+      if      (Math.abs(newStart - cf) <= 2) { newStart = cf; newEnd = newStart + duration }
+      else if (Math.abs(newEnd   - cf) <= 2) { newEnd   = cf; newStart = newEnd - duration }
+
+      editor.updateMotionPath(mpId, { startFrame: newStart, endFrame: newEnd })
+
+    } else if (mode === 'resize-left') {
+      let newStart = Math.max(0, Math.min(origStart + frameDelta, target.endFrame - 1))
+      if (Math.abs(newStart - cf) <= 2) newStart = cf
+      editor.updateMotionPath(mpId, { startFrame: newStart })
+
+    } else {
+      let newEnd = Math.max(target.startFrame + 1, Math.min(origEnd + frameDelta, timeline.totalFrames))
+      if (Math.abs(newEnd - cf) <= 2) newEnd = cf
+      editor.updateMotionPath(mpId, { endFrame: newEnd })
+    }
+  }
+
+  function onUp() {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    history?.save()
   }
 
   document.addEventListener('mousemove', onMove)
@@ -265,7 +326,6 @@ function onLabelsScroll() {
 // Element type icons
 const typeIcons: Record<string, Component> = {
   rect: IconRect,
-  circle: IconCircle,
   ellipse: IconEllipse,
   line: IconLine,
   path: IconPen,
@@ -347,8 +407,10 @@ const dragFrameOffset = computed(() =>
             :drag-frame-offset="dragFrameOffset"
             :dragging-ids="draggingIds"
             :video-trim="track.el.type === 'video' ? { trimStart: (track.el as any).trimStart, trimEnd: (track.el as any).trimEnd, fps: timeline.fps } : undefined"
+            :motion-path="editor.getMotionPathForElement(track.el.id) ?? undefined"
             @keyframe-mousedown="onKeyframeMouseDown"
             @track-click="onTrackClick"
+            @mp-bar-mousedown="onMpBarMouseDown"
           />
           <TimelinePlayhead
             :frame="timeline.currentFrame"

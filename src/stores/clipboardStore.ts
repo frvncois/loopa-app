@@ -40,6 +40,15 @@ export const useClipboardStore = defineStore('clipboard', () => {
       }
     })
 
+    // Remap childIds inside group elements to use new IDs
+    for (const el of newElements) {
+      if (el.type === 'group' && (el as any).childIds) {
+        (el as any).childIds = ((el as any).childIds as string[]).map(
+          (cid: string) => idMap.get(cid) ?? cid
+        )
+      }
+    }
+
     const newKeyframes: Keyframe[] = data.value.keyframes
       .filter(kf => idMap.has(kf.elementId))
       .map(kf => ({

@@ -78,8 +78,6 @@ const filters = computed(() => getFilters())
 
 <template>
   <div v-if="el" class="section">
-    <div class="title">Image</div>
-
     <!-- File info -->
     <div class="info-row">
       <span class="file-name">{{ el.imageFileName }}</span>
@@ -173,18 +171,10 @@ const filters = computed(() => getFilters())
 
 <style scoped>
 .section {
-  padding: 0.625rem 0.75rem;
-  border-bottom: 1px solid var(--border);
+  padding: 0.375rem 0.75rem 0.625rem;
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
-}
-
-.title {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: var(--text-2);
-  margin-bottom: 0.125rem;
 }
 
 .info-row {

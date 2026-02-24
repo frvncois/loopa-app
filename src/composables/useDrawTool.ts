@@ -10,7 +10,7 @@ type EditorStore = ReturnType<typeof useEditorStore>
 type UiStore = ReturnType<typeof useUiStore>
 type Canvas = ReturnType<typeof useCanvas>
 
-const DRAW_TOOLS: ElementType[] = ['rect', 'circle', 'ellipse', 'line', 'polygon', 'star', 'text']
+const DRAW_TOOLS: ElementType[] = ['rect', 'ellipse', 'line', 'polygon', 'star', 'text']
 
 export function useDrawTool(
   editorStore: EditorStore,
@@ -40,18 +40,38 @@ export function useDrawTool(
     document.addEventListener('mouseup', onCanvasUp)
   }
 
+  const CONSTRAIN_TOOLS = new Set(['rect', 'ellipse', 'star', 'polygon'])
+
+  function applyConstraint(dx: number, dy: number, tool: string, shiftKey: boolean): [number, number] {
+    if (!shiftKey || !CONSTRAIN_TOOLS.has(tool)) return [dx, dy]
+    const size = Math.max(Math.abs(dx), Math.abs(dy))
+    return [size * Math.sign(dx || 1), size * Math.sign(dy || 1)]
+  }
+
   function onCanvasMove(e: MouseEvent) {
     if (!isDrawing.value) return
-    let pos = canvas.screenToSvg(e.clientX, e.clientY)
+    const pos = canvas.screenToSvg(e.clientX, e.clientY)
+    const tool = uiStore.currentTool
+
+    let dx = pos.x - startSvg.x
+    let dy = pos.y - startSvg.y
+
+    // 1. Shift constraint
+    ;[dx, dy] = applyConstraint(dx, dy, tool, e.shiftKey)
+
+    // 2. Grid snap: snap the end edge, then re-apply constraint
     if (uiStore.snapToGrid) {
-      pos.x = snapToGrid(pos.x, uiStore.gridSize)
-      pos.y = snapToGrid(pos.y, uiStore.gridSize)
+      const endX = snapToGrid(startSvg.x + dx, uiStore.gridSize)
+      const endY = snapToGrid(startSvg.y + dy, uiStore.gridSize)
+      dx = endX - startSvg.x
+      dy = endY - startSvg.y
+      ;[dx, dy] = applyConstraint(dx, dy, tool, e.shiftKey)
     }
 
-    drawPreview.x = Math.min(startSvg.x, pos.x)
-    drawPreview.y = Math.min(startSvg.y, pos.y)
-    drawPreview.width = Math.abs(pos.x - startSvg.x)
-    drawPreview.height = Math.abs(pos.y - startSvg.y)
+    drawPreview.x = startSvg.x + Math.min(0, dx)
+    drawPreview.y = startSvg.y + Math.min(0, dy)
+    drawPreview.width = Math.abs(dx)
+    drawPreview.height = Math.abs(dy)
   }
 
   function onCanvasUp() {
@@ -65,14 +85,11 @@ export function useDrawTool(
     const type = uiStore.currentTool as ElementType
     const minSize = 4
     const frameId = uiStore.activeFrameId ?? ''
+    const el = createDefaultElement(type)
     if (drawPreview.width < minSize && drawPreview.height < minSize) {
       // Click without drag: use default size centered at click
-      const el = createDefaultElement(type)
       editorStore.addElement({ ...el, x: startSvg.x - 50, y: startSvg.y - 50 }, frameId)
-      uiStore.select(el.id)
-      uiStore.setTool('select')
     } else {
-      const el = createDefaultElement(type)
       editorStore.addElement({
         ...el,
         x: drawPreview.x,
@@ -80,8 +97,12 @@ export function useDrawTool(
         width: drawPreview.width || 100,
         height: drawPreview.height || 100
       }, frameId)
-      uiStore.select(el.id)
-      uiStore.setTool('select')
+    }
+    uiStore.select(el.id)
+    uiStore.setTool('select')
+    // Auto-start inline text editing immediately after placing a text element
+    if (type === 'text') {
+      window.dispatchEvent(new CustomEvent('loopa:startTextEdit', { detail: { id: el.id } }))
     }
   }
 

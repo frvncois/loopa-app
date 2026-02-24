@@ -23,8 +23,55 @@ export function useElementDrag(
   let startSvg = { x: 0, y: 0 }
   let startPositions = new Map<string, { x: number; y: number }>()
 
+  // ── Ctrl+drag: 3D rotate ─────────────────────────────────────────────────
+  let rotate3dId = ''
+  let rotate3dMouseX = 0
+  let rotate3dMouseY = 0
+  let rotate3dStartRX = 0
+  let rotate3dStartRY = 0
+
+  function start3dRotate(e: MouseEvent, id: string) {
+    const el = getAnimatedEl ? getAnimatedEl(id) : editorStore.getElementById(id)
+    if (!el) return
+    rotate3dId = id
+    rotate3dMouseX = e.clientX
+    rotate3dMouseY = e.clientY
+    rotate3dStartRX = (el as any).rotateX ?? 0
+    rotate3dStartRY = (el as any).rotateY ?? 0
+    uiStore.setTransforming(true)
+    document.addEventListener('mousemove', on3dMove)
+    document.addEventListener('mouseup', on3dUp)
+  }
+
+  function on3dMove(e: MouseEvent) {
+    const dx = e.clientX - rotate3dMouseX
+    const dy = e.clientY - rotate3dMouseY
+    const newRY = Math.max(-90, Math.min(90, Math.round(rotate3dStartRY + dx * 0.5)))
+    const newRX = Math.max(-90, Math.min(90, Math.round(rotate3dStartRX - dy * 0.5)))
+    if (setAnimatedProp) {
+      setAnimatedProp(rotate3dId, { rotateX: newRX, rotateY: newRY })
+    } else {
+      editorStore.updateElement(rotate3dId, { rotateX: newRX, rotateY: newRY } as any)
+    }
+  }
+
+  function on3dUp() {
+    document.removeEventListener('mousemove', on3dMove)
+    document.removeEventListener('mouseup', on3dUp)
+    uiStore.setTransforming(false)
+  }
+
   function onElementMouseDown(e: MouseEvent, id: string): string {
     if (isDraggingOrigin?.value) return id
+
+    // Ctrl+drag (without Meta/Alt): 3D rotate mode
+    if (e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.stopPropagation()
+      uiStore.select(id)
+      start3dRotate(e, id)
+      return id
+    }
+
     e.stopPropagation()
 
     // Group bubble-up: if clicking on a child, select the parent group (unless we're inside it)
@@ -83,9 +130,15 @@ export function useElementDrag(
 
   function onMove(e: MouseEvent) {
     const current = canvas.screenToSvg(e.clientX, e.clientY)
-    const dx = current.x - startSvg.x
-    const dy = current.y - startSvg.y
+    let dx = current.x - startSvg.x
+    let dy = current.y - startSvg.y
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) isDragging.value = true
+
+    // Shift: lock to dominant axis (total delta from drag start, not per-frame — no flicker)
+    if (e.shiftKey) {
+      if (Math.abs(dx) >= Math.abs(dy)) dy = 0
+      else dx = 0
+    }
 
     for (const [id, pos] of startPositions) {
       let nx = pos.x + dx

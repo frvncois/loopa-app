@@ -13,6 +13,7 @@ export const useTimelineStore = defineStore('timeline', () => {
 
   let rafId: number | null = null
   let lastTime: number | null = null
+  let pingPongForward = true
 
   // ── Getters ──
   const duration = computed(() => totalFrames.value / fps.value)
@@ -41,16 +42,56 @@ export const useTimelineStore = defineStore('timeline', () => {
     lastTime = ts
     const frameDelta = (delta / 1000) * fps.value
 
-    let next = currentFrame.value + frameDelta
-    if (next >= totalFrames.value) {
-      if (loop.value) {
-        next = next % totalFrames.value
+    const dir = direction.value
+    let next = currentFrame.value
+
+    if (dir === 'reverse') {
+      next -= frameDelta
+      if (next <= 0) {
+        if (loop.value) {
+          next = totalFrames.value + (next % totalFrames.value)
+        } else {
+          currentFrame.value = 0
+          pause()
+          return
+        }
+      }
+    } else if (dir === 'ping-pong') {
+      if (pingPongForward) {
+        next += frameDelta
+        if (next >= totalFrames.value) {
+          next = totalFrames.value - (next - totalFrames.value)
+          pingPongForward = false
+        }
       } else {
-        next = totalFrames.value
-        pause()
+        next -= frameDelta
+        if (next <= 0) {
+          if (loop.value) {
+            next = -next
+            pingPongForward = true
+          } else {
+            currentFrame.value = 0
+            pause()
+            return
+          }
+        }
+      }
+      next = Math.max(0, Math.min(next, totalFrames.value))
+    } else {
+      // normal
+      next += frameDelta
+      if (next >= totalFrames.value) {
+        if (loop.value) {
+          next = next % totalFrames.value
+        } else {
+          currentFrame.value = totalFrames.value
+          pause()
+          return
+        }
       }
     }
-    currentFrame.value = Math.min(next, totalFrames.value)
+
+    currentFrame.value = Math.max(0, Math.min(next, totalFrames.value))
     if (isPlaying.value) rafId = requestAnimationFrame(_tick)
   }
 
@@ -58,6 +99,7 @@ export const useTimelineStore = defineStore('timeline', () => {
     if (isPlaying.value) return
     isPlaying.value = true
     lastTime = null
+    pingPongForward = true
     rafId = requestAnimationFrame(_tick)
   }
 

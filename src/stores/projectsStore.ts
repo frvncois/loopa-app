@@ -5,6 +5,8 @@ import type { Frame } from '@/types/frame'
 import type { Element } from '@/types/elements'
 import { generateId } from '@/lib/utils/id'
 import { lsGet, lsSet, lsRemove } from '@/composables/useLocalStorage'
+import { pathPointsToD } from '@/lib/path/PathBuilder'
+import { pointsToSvgPath } from '@/lib/path/motionPathMath'
 
 const INDEX_KEY = 'loopa_projects_index'
 const projectKey = (id: string) => `loopa_project_${id}`
@@ -101,7 +103,52 @@ export const useProjectsStore = defineStore('projects', () => {
   }
 
   function loadProjectData(id: string): ProjectData | null {
-    return lsGet<ProjectData>(projectKey(id))
+    const data = lsGet<ProjectData>(projectKey(id))
+    if (!data) return null
+    // Migrate: circle elements → ellipse
+    for (const el of data.elements ?? []) {
+      if ((el as any).type === 'circle') (el as any).type = 'ellipse'
+    }
+    // Migrate: path elements with absolute coords → relative coords
+    // Old paths stored points in absolute SVG space; new paths are relative to (el.x, el.y).
+    for (const el of data.elements ?? []) {
+      if ((el as any).type === 'path' && !(el as any).relativePoints) {
+        const ox: number = (el as any).x ?? 0
+        const oy: number = (el as any).y ?? 0
+        ;(el as any).points = ((el as any).points ?? []).map((p: any) => ({
+          ...p,
+          x: p.x - ox,
+          y: p.y - oy,
+          handleIn:  p.handleIn  ? { x: p.handleIn.x  - ox, y: p.handleIn.y  - oy } : null,
+          handleOut: p.handleOut ? { x: p.handleOut.x - ox, y: p.handleOut.y - oy } : null,
+        }))
+        // Rebuild d from migrated relative points
+        if ((el as any).points.length >= 2) {
+          ;(el as any).d = pathPointsToD((el as any).points, (el as any).closed)
+        }
+        ;(el as any).relativePoints = true
+      }
+    }
+    // Migrate: motion path points from absolute canvas coords → relative to element center.
+    // Old paths stored absolute SVG positions; new paths store offsets from element center.
+    const elementMap = new Map((data.elements ?? []).map((e: any) => [e.id, e]))
+    for (const mp of (data.motionPaths ?? []) as any[]) {
+      if (!mp.points?.length) continue
+      const first = mp.points[0]
+      // If first point is near origin (0,0), it's already relative — skip
+      if (Math.hypot(first.x, first.y) <= 10) continue
+      const el = elementMap.get(mp.elementId)
+      if (!el) continue
+      // Subtract element center from all point positions (handles stay relative to their point)
+      const cx = (el.x ?? 0) + (el.width ?? 0) / 2
+      const cy = (el.y ?? 0) + (el.height ?? 0) / 2
+      for (const pt of mp.points) {
+        pt.x -= cx
+        pt.y -= cy
+      }
+      mp.d = pointsToSvgPath(mp.points)
+    }
+    return data
   }
 
   function saveProjectData(id: string, data: ProjectData): void {

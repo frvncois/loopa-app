@@ -1,4 +1,4 @@
-export type ToolType = 'select' | 'rect' | 'circle' | 'ellipse' | 'line' | 'polygon' | 'star' | 'text' | 'pen' | 'hand' | 'crop'
+export type ToolType = 'select' | 'rect' | 'ellipse' | 'line' | 'polygon' | 'star' | 'text' | 'pen' | 'hand' | 'crop' | 'motion-path'
 
 export interface ToolDefinition {
   id: ToolType

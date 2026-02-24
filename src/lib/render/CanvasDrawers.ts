@@ -108,14 +108,6 @@ export function drawElement(
       break
     }
 
-    case 'circle': {
-      const r = Math.min(w, h) / 2
-      ctx.beginPath()
-      ctx.arc(cx, cy, r, 0, Math.PI * 2)
-      applyFillStroke(ctx, el, anim)
-      break
-    }
-
     case 'ellipse': {
       const e = el as EllipseElement
       void e

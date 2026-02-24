@@ -1,7 +1,7 @@
 import { generateId } from '@/lib/utils/id'
 import { rgbToHex } from '@/lib/utils/color'
 import type {
-  Element, RectElement, CircleElement, EllipseElement, LineElement,
+  Element, RectElement, EllipseElement, LineElement,
   PathElement, PolygonElement, TextElement, GroupElement, FillEntry, StrokeEntry, ShadowEntry
 } from '@/types/elements'
 import type { ImportResult, ImportWarning } from '@/types/export'
@@ -120,12 +120,12 @@ function convertRect(node: ParsedNode, warnings: ImportWarning[]): RectElement |
   }
 }
 
-function convertCircle(node: ParsedNode): CircleElement | null {
+function convertCircle(node: ParsedNode): EllipseElement | null {
   const r  = parseFloat(node.attrs['r']  ?? '0') * Math.max(node.transform.scaleX, node.transform.scaleY)
   const cx = parseFloat(node.attrs['cx'] ?? '0') + node.transform.translateX
   const cy = parseFloat(node.attrs['cy'] ?? '0') + node.transform.translateY
   if (isNaN(r) || r <= 0) return null
-  return { ...baseProps(node), type: 'circle', x: cx - r, y: cy - r, width: r * 2, height: r * 2 }
+  return { ...baseProps(node), type: 'ellipse', x: cx - r, y: cy - r, width: r * 2, height: r * 2 }
 }
 
 function convertEllipse(node: ParsedNode): EllipseElement | null {

@@ -3,6 +3,7 @@ import { useEditorStore } from '@/stores/editorStore'
 import { useUiStore } from '@/stores/uiStore'
 import { getMultiBounds } from '@/lib/elements/ElementBounds'
 import { computed } from 'vue'
+import type { GroupElement } from '@/types/elements'
 import IconAlignLeft from '@/components/icons/IconAlignLeft.vue'
 import IconAlignCenterH from '@/components/icons/IconAlignCenterH.vue'
 import IconAlignRight from '@/components/icons/IconAlignRight.vue'
@@ -13,7 +14,15 @@ import IconAlignBottom from '@/components/icons/IconAlignBottom.vue'
 const editor = useEditorStore()
 const ui = useUiStore()
 
-const selected = computed(() => editor.elements.filter(e => ui.selectedIds.has(e.id)))
+// When a single group is selected, align its children instead
+const selected = computed(() => {
+  const direct = editor.elements.filter(e => ui.selectedIds.has(e.id))
+  if (direct.length === 1 && direct[0].type === 'group') {
+    const group = direct[0] as GroupElement
+    return editor.elements.filter(e => group.childIds.includes(e.id))
+  }
+  return direct
+})
 
 function align(type: string) {
   const els = selected.value
@@ -57,7 +66,7 @@ function align(type: string) {
 </template>
 
 <style scoped>
-.section { padding: 0.375rem 0.75rem; border-bottom: 1px solid var(--border); }
+.section { padding: 0.375rem 0.75rem; }
 .align-row { display: flex; gap: 0.125rem; padding: 0.125rem 0; }
 .align-btn {
   flex: 1;

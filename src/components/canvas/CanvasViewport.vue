@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, provide } from 'vue'
+import { ref, computed, provide, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useUiStore } from '@/stores/uiStore'
 import { useEditorStore } from '@/stores/editorStore'
 import { useTimelineStore } from '@/stores/timelineStore'
 import { computeElementAtFrame } from '@/lib/engine/AnimationEngine'
+import { computeMotionPathPosition, getPointOnPath } from '@/lib/path/motionPathMath'
 import type { useCanvas } from '@/composables/useCanvas'
 import type { useDrawTool } from '@/composables/useDrawTool'
 import type { useElementDrag } from '@/composables/useElementDrag'
@@ -14,7 +15,10 @@ import type { usePenTool } from '@/composables/usePenTool'
 import type { usePathEditor } from '@/composables/usePathEditor'
 import type { useCropTool } from '@/composables/useCropTool'
 import type { useTransformOrigin } from '@/composables/useTransformOrigin'
-import type { PathElement, GroupElement, ElementType, ImageElement } from '@/types/elements'
+import type { useMotionPathTool } from '@/composables/useMotionPathTool'
+import type { useMotionPathEditor } from '@/composables/useMotionPathEditor'
+import type { PathElement, GroupElement, ElementType, ImageElement, TextElement } from '@/types/elements'
+import type { AnimatableProps } from '@/types/animation'
 import { storeImage } from '@/lib/utils/videoStorage'
 import { generateId } from '@/lib/utils/id'
 import CanvasArtboard from './CanvasArtboard.vue'
@@ -40,6 +44,8 @@ const props = defineProps<{
   pathEditor: ReturnType<typeof usePathEditor>
   cropTool: ReturnType<typeof useCropTool>
   transformOriginComposable?: ReturnType<typeof useTransformOrigin>
+  motionPathTool?: ReturnType<typeof useMotionPathTool>
+  motionPathEditor?: ReturnType<typeof useMotionPathEditor>
   artboardWidth: number
   artboardHeight: number
 }>()
@@ -49,7 +55,7 @@ const editor = useEditorStore()
 const timeline = useTimelineStore()
 
 const maskId = Math.random().toString(36).slice(2, 8)
-const DRAW_TOOLS: ElementType[] = ['rect', 'circle', 'ellipse', 'line', 'polygon', 'star', 'text']
+const DRAW_TOOLS: ElementType[] = ['rect', 'ellipse', 'line', 'polygon', 'star', 'text']
 
 // viewportEl points to canvas-area (inset by ruler size) so that
 // screenToSvg, viewBox, and fitToView all use the correct coordinate origin.
@@ -75,12 +81,25 @@ const activeFrameAllElements = computed(() =>
 
 // Compute animated props per element, reactive to currentFrame.
 // Covers ALL frame elements (including group children) so mask group children get animated props too.
+// Also applies motion path overrides (override x/y and optionally rotation).
 const animatedPropsMap = computed(() => {
   const frame = timeline.currentFrame
-  const map = new Map<string, ReturnType<typeof computeElementAtFrame>>()
+  const map = new Map<string, AnimatableProps>()
   for (const el of activeFrameAllElements.value) {
     const kfs = activeFrameKeyframes.value.filter(kf => kf.elementId === el.id)
-    if (kfs.length > 0) map.set(el.id, computeElementAtFrame(kfs, frame))
+    let props: AnimatableProps = kfs.length > 0 ? computeElementAtFrame(kfs, frame) : {}
+
+    // Motion path offset (relative, added to base element position)
+    const mp = editor.motionPaths.find(m => m.elementId === el.id)
+    if (mp) {
+      const override = computeMotionPathPosition(mp, frame)
+      if (override) {
+        props = { ...props, x: el.x + override.x, y: el.y + override.y }
+        if (override.rotation !== undefined) props = { ...props, rotation: override.rotation }
+      }
+    }
+
+    if (Object.keys(props).length > 0) map.set(el.id, props)
   }
   return map
 })
@@ -106,6 +125,169 @@ const selectionTransformOrigin = computed(() => {
     x: (anim as any)?.transformOriginX ?? (el as any).transformOrigin?.x ?? 0.5,
     y: (anim as any)?.transformOriginY ?? (el as any).transformOrigin?.y ?? 0.5,
   }
+})
+
+// ── Inline text editing ───────────────────────────────────────────────────────
+
+const editingTextId = ref<string | null>(null)
+const editingTextValue = ref('')
+const editingTextOriginal = ref('')
+
+function startTextEditing(id: string) {
+  const el = editor.elements.find(e => e.id === id)
+  if (!el || el.type !== 'text') return
+  const textEl = el as TextElement
+  editingTextId.value = id
+  editingTextValue.value = textEl.text || ''
+  editingTextOriginal.value = textEl.text || ''
+  ui.select(id)
+  nextTick(() => {
+    const input = document.getElementById('canvas-text-editor') as HTMLElement | null
+    if (input) {
+      input.innerText = textEl.text || ''
+      input.focus()
+      try {
+        const range = document.createRange()
+        range.selectNodeContents(input)
+        const sel = window.getSelection()
+        sel?.removeAllRanges()
+        sel?.addRange(range)
+      } catch { /* ignore */ }
+    }
+  })
+}
+
+function commitTextEdit() {
+  if (!editingTextId.value) return
+  const id = editingTextId.value
+  // Read final text from DOM (innerText correctly converts <br>/<div> to \n)
+  const editorEl = document.getElementById('canvas-text-editor') as HTMLElement | null
+  let finalText = editorEl?.innerText ?? editingTextValue.value
+  // Strip only leading/trailing blank lines; preserve internal line breaks
+  finalText = finalText.replace(/^\n+/, '').replace(/\n+$/, '')
+  if (!finalText.trim()) finalText = 'Text'
+  editingTextId.value = null
+  editingTextValue.value = ''
+  editingTextOriginal.value = ''
+  editor.updateElement(id, { text: finalText })
+  measureAndUpdateTextBounds(id)
+}
+
+function cancelTextEdit() {
+  if (!editingTextId.value) return
+  const id = editingTextId.value
+  const original = editingTextOriginal.value
+  editingTextId.value = null
+  editingTextValue.value = ''
+  editingTextOriginal.value = ''
+  // Restore original text (since we live-update during typing)
+  editor.updateElement(id, { text: original })
+  measureAndUpdateTextBounds(id)
+}
+
+function onTextEditorInput(e: Event) {
+  const text = (e.target as HTMLElement).innerText
+  editingTextValue.value = text
+  if (!editingTextId.value) return
+  // Live-update element so properties panel stays in sync
+  editor.updateElement(editingTextId.value, { text })
+  measureAndUpdateTextBounds(editingTextId.value)
+}
+
+function onTextEditorKeyDown(e: KeyboardEvent) {
+  e.stopPropagation()
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    cancelTextEdit()
+    return
+  }
+  if (e.key === 'Tab') {
+    e.preventDefault()
+    commitTextEdit()
+    return
+  }
+  // Enter creates line breaks naturally — don't intercept it
+}
+
+function measureAndUpdateTextBounds(id: string) {
+  const el = editor.elements.find(e => e.id === id)
+  if (!el || el.type !== 'text') return
+  const textEl = el as TextElement
+  const text = textEl.text || 'Text'
+  const fontSize = textEl.fontSize ?? 24
+  const fontFamily = textEl.fontFamily ?? 'DM Sans'
+  const fontWeight = textEl.fontWeight ?? 400
+  const lineHeight = fontSize * 1.25
+  const lines = text.split('\n')
+
+  // Accurate measurement via hidden SVG text element
+  const measurer = document.getElementById('svg-text-measurer') as SVGTextElement | null
+  if (measurer) {
+    measurer.setAttribute('font-size', String(fontSize))
+    measurer.setAttribute('font-family', fontFamily)
+    measurer.setAttribute('font-weight', String(fontWeight))
+    let maxWidth = 0
+    for (const line of lines) {
+      measurer.textContent = line || '\u00A0'
+      try {
+        const bbox = measurer.getBBox()
+        if (bbox.width > maxWidth) maxWidth = bbox.width
+      } catch { /* ignore */ }
+    }
+    if (maxWidth > 0) {
+      editor.updateElement(id, {
+        width: Math.ceil(maxWidth),
+        height: Math.ceil(lines.length * lineHeight),
+      })
+      return
+    }
+  }
+
+  // Fallback estimate
+  const longestLine = lines.reduce((a, b) => a.length > b.length ? a : b, '')
+  editor.updateElement(id, {
+    width: Math.ceil(Math.max(longestLine.length * fontSize * 0.6, 30)),
+    height: Math.ceil(lines.length * lineHeight),
+  })
+}
+
+// Exit text editing when tool changes
+watch(() => ui.currentTool, () => {
+  if (editingTextId.value) commitTextEdit()
+})
+
+// Exit text editing when selection moves away from the editing element
+watch(() => ui.selectedIds.size, () => {
+  if (editingTextId.value && !ui.selectedIds.has(editingTextId.value)) {
+    commitTextEdit()
+  }
+})
+
+// Hint for selected (but not yet editing) text elements
+const selectedTextForHint = computed((): TextElement | null => {
+  if (ui.selectedIds.size !== 1 || editingTextId.value) return null
+  const id = [...ui.selectedIds][0]
+  const el = editor.elements.find(e => e.id === id)
+  return el?.type === 'text' ? (el as TextElement) : null
+})
+
+// Listen for text-edit trigger from draw tool (text placed via toolbar click)
+function onStartTextEditEvent(e: Event) {
+  const id = (e as CustomEvent<{ id: string }>).detail?.id
+  if (id) startTextEditing(id)
+}
+// Listen for measurement requests from properties panel property changes
+function onRemeasureTextEvent(e: Event) {
+  const id = (e as CustomEvent<{ id: string }>).detail?.id
+  if (id) measureAndUpdateTextBounds(id)
+}
+onMounted(() => {
+  window.addEventListener('loopa:startTextEdit', onStartTextEditEvent)
+  window.addEventListener('loopa:remeasureText', onRemeasureTextEvent)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('loopa:startTextEdit', onStartTextEditEvent)
+  window.removeEventListener('loopa:remeasureText', onRemeasureTextEvent)
 })
 
 function onOriginMouseDown(e: MouseEvent) {
@@ -135,10 +317,47 @@ const editingPath = computed((): PathElement | null => {
   return el?.type === 'path' ? (el as PathElement) : null
 })
 
+// ── Motion path helpers ───────────────────────────────────────────────────────
+
+const visibleMotionPaths = computed(() =>
+  editor.motionPaths.filter(mp => ui.selectedIds.has(mp.elementId) && !timeline.isPlaying)
+)
+
+function isPathEditable(mpId: string): boolean {
+  const mp = editor.motionPaths.find(m => m.id === mpId)
+  if (!mp) return false
+  return ui.selectedIds.has(mp.elementId) && !timeline.isPlaying && ui.currentTool === 'select'
+}
+
+// Returns the element center for a given motion path — used as the translate
+// origin for the guide overlay so that path relative coords render correctly.
+function mpElementCenter(elementId: string): { x: number; y: number } {
+  const el = editor.getElementById(elementId)
+  if (!el) return { x: 0, y: 0 }
+  return { x: el.x + el.width / 2, y: el.y + el.height / 2 }
+}
+
+// Returns the progress-dot position as a RELATIVE offset (inside the translated group)
+function progressDot(mpId: string): { x: number; y: number } | null {
+  const mp = editor.motionPaths.find(m => m.id === mpId)
+  if (!mp || mp.points.length < 2) return null
+  const frame = timeline.currentFrame
+  if (frame < mp.startFrame || frame > mp.endFrame) return null
+  const t = (frame - mp.startFrame) / (mp.endFrame - mp.startFrame)
+  return getPointOnPath(mp.points, t)
+}
+
 function onMouseDown(e: MouseEvent) {
   const target = e.target as SVGElement
   const isBackground = target === viewportEl.value?.querySelector('svg')
     || target.classList.contains('artboard')
+
+  // ── Motion path drawing tool — intercepts ALL clicks while drawing ──
+  if (props.motionPathTool?.isDrawing.value) {
+    const pos = props.canvas.screenToSvg(e.clientX, e.clientY)
+    props.motionPathTool.onCanvasMouseDown(e, pos.x, pos.y)
+    return
+  }
 
   // ── Pen tool: delegate ALL clicks ──
   if (ui.currentTool === 'pen') {
@@ -175,6 +394,7 @@ function onMouseDown(e: MouseEvent) {
   }
 
   if (ui.currentTool === 'select') {
+    if (editingTextId.value) commitTextEdit()
     ui.clearSelection()
     const pos = props.canvas.screenToSvg(e.clientX, e.clientY)
     marqueeStart = pos
@@ -210,12 +430,20 @@ function onMouseMove(e: MouseEvent) {
   cursorX.value = pos.x
   cursorY.value = pos.y
   props.penTool.onCanvasMouseMove(e)
+  if (ui.currentTool === 'motion-path' && props.motionPathTool) {
+    props.motionPathTool.onCanvasMouseMove(e, pos.x, pos.y)
+  }
 }
 
 function onDblClick(e: MouseEvent) {
   if (ui.currentTool === 'pen') {
     props.penTool.onCanvasDblClick(e)
   }
+  // Motion path pen mode: double-click is detected internally via time+distance threshold in onCanvasMouseDown
+}
+
+function onCanvasMouseUp(e: MouseEvent) {
+  props.motionPathTool?.onCanvasMouseUp(e)
 }
 
 function onContextMenu(e: MouseEvent) {
@@ -290,6 +518,12 @@ async function onDrop(e: DragEvent) {
 }
 
 function onElementMouseDown(e: MouseEvent, id: string) {
+  // When drawing motion path, element clicks must also route to the tool
+  if (props.motionPathTool?.isDrawing.value) {
+    const pos = props.canvas.screenToSvg(e.clientX, e.clientY)
+    props.motionPathTool.onCanvasMouseDown(e, pos.x, pos.y)
+    return
+  }
   if (ui.currentTool === 'pen') {
     props.penTool.onCanvasMouseDown(e)
     return
@@ -298,6 +532,12 @@ function onElementMouseDown(e: MouseEvent, id: string) {
   if (DRAW_TOOLS.includes(ui.currentTool as ElementType)) {
     props.drawTool.onCanvasDown(e)
     return
+  }
+  // Don't start drag if we're inline-editing this text element
+  if (editingTextId.value === id) return
+  // If editing a different element's text, commit it first
+  if (editingTextId.value && editingTextId.value !== id) {
+    commitTextEdit()
   }
   props.elementDrag.onElementMouseDown(e, id)
 }
@@ -316,6 +556,11 @@ function findChildAtPoint(group: GroupElement, pt: { x: number; y: number }): st
 
 function onElementDblClick(e: MouseEvent, id: string) {
   const el = editor.elements.find(el => el.id === id)
+  if (el?.type === 'text') {
+    e.stopPropagation()
+    startTextEditing(id)
+    return
+  }
   if (el?.type === 'path') {
     e.stopPropagation()
     ui.select(id)
@@ -346,6 +591,15 @@ function onSelectionResizeStart(e: MouseEvent, h: string) {
 provide('onElementMouseDown', onElementMouseDown)
 provide('onElementDblClick', onElementDblClick)
 provide('animatedPropsMap', animatedPropsMap)
+provide('textEditState', {
+  editingTextId,
+  editingTextValue,
+  commitTextEdit,
+  cancelTextEdit,
+  onTextEditorInput,
+  onTextEditorKeyDown,
+  measureAndUpdateTextBounds,
+})
 
 defineExpose({ viewportEl })
 </script>
@@ -368,6 +622,7 @@ defineExpose({ viewportEl })
               : 'crosshair'
       }"
       @mousedown="onMouseDown"
+      @mouseup="onCanvasMouseUp"
       @mousemove="onMouseMove"
       @dblclick="onDblClick"
       @contextmenu="onContextMenu"
@@ -389,6 +644,9 @@ defineExpose({ viewportEl })
           :artboard-width="activeFrame?.width ?? artboardWidth"
           :artboard-height="activeFrame?.height ?? artboardHeight"
         />
+
+        <!-- Hidden text measurer — always in DOM for accurate getBBox() measurement -->
+        <text id="svg-text-measurer" x="-99999" y="-99999" style="visibility:hidden;pointer-events:none" />
 
         <!-- Elements (top-level only; groups render their children recursively) -->
         <ElementRenderer
@@ -430,9 +688,9 @@ defineExpose({ viewportEl })
           :on-crop-rect-mouse-down="cropTool.onCropRectMouseDown"
         />
 
-        <!-- Selection overlay (hidden in path edit mode or crop mode) -->
+        <!-- Selection overlay (hidden in path edit mode, crop mode, or text editing) -->
         <SelectionOverlay
-          v-if="selection.selectionBounds.value && !ui.pathEditMode && !cropTool.isCropMode.value"
+          v-if="selection.selectionBounds.value && !ui.pathEditMode && !cropTool.isCropMode.value && !editingTextId"
           :bounds="selection.selectionBounds.value"
           :rotation="selectionRotation"
           :is-rotating="elementRotate.isRotating.value"
@@ -442,6 +700,19 @@ defineExpose({ viewportEl })
           @rotate-start="(e) => elementRotate.onRotateStart(e, [...ui.selectedIds], selection.selectionBounds.value!)"
           @origin-mousedown="onOriginMouseDown"
         />
+
+        <!-- Hint: double-click to edit selected text element -->
+        <text
+          v-if="selectedTextForHint"
+          :x="selectedTextForHint.x + (selectedTextForHint.width ?? 100) / 2"
+          :y="selectedTextForHint.y - 10"
+          text-anchor="middle"
+          fill="var(--accent)"
+          font-size="14"
+          opacity="0.7"
+          pointer-events="none"
+          style="font-family: system-ui, sans-serif; user-select: none"
+        >Double-click to edit</text>
 
         <!-- Marquee -->
         <MarqueeSelect v-bind="marquee" />
@@ -461,7 +732,152 @@ defineExpose({ viewportEl })
           :path="editingPath"
           :path-editor="pathEditor"
         />
+
+        <!-- Motion path guides (path points are relative to element center) -->
+        <template v-for="mp in visibleMotionPaths" :key="mp.id">
+          <!-- Translate group so relative coords render at element center -->
+          <g :transform="`translate(${mpElementCenter(mp.elementId).x},${mpElementCenter(mp.elementId).y})`">
+            <g class="mp-guide" pointer-events="none">
+              <!-- Dotted guide line -->
+              <path
+                :d="mp.d"
+                fill="none"
+                stroke="var(--accent)"
+                stroke-width="1.5"
+                stroke-dasharray="6 4"
+                opacity="0.65"
+                pointer-events="none"
+              />
+              <!-- Progress dot (relative position inside translated group) -->
+              <circle
+                v-if="progressDot(mp.id)"
+                :cx="progressDot(mp.id)!.x"
+                :cy="progressDot(mp.id)!.y"
+                r="5"
+                fill="var(--accent)"
+                opacity="0.85"
+                pointer-events="none"
+              />
+            </g>
+            <!-- Editable control points + handles (only when element selected + not playing) -->
+            <g v-if="isPathEditable(mp.id)" class="mp-edit" pointer-events="all">
+              <template v-for="(pt, i) in mp.points" :key="'h-' + i">
+                <!-- Handle-in line + dot -->
+                <template v-if="pt.handleIn.x !== 0 || pt.handleIn.y !== 0">
+                  <line
+                    :x1="pt.x" :y1="pt.y"
+                    :x2="pt.x + pt.handleIn.x" :y2="pt.y + pt.handleIn.y"
+                    stroke="var(--accent)" stroke-width="1" opacity="0.5"
+                    pointer-events="none"
+                  />
+                  <circle
+                    :cx="pt.x + pt.handleIn.x" :cy="pt.y + pt.handleIn.y"
+                    r="3" fill="white" stroke="var(--accent)" stroke-width="1.5"
+                    style="cursor: grab"
+                    @mousedown.stop="motionPathEditor?.startHandleDrag(mp.id, i, 'in', $event)"
+                  />
+                </template>
+                <!-- Handle-out line + dot -->
+                <template v-if="pt.handleOut.x !== 0 || pt.handleOut.y !== 0">
+                  <line
+                    :x1="pt.x" :y1="pt.y"
+                    :x2="pt.x + pt.handleOut.x" :y2="pt.y + pt.handleOut.y"
+                    stroke="var(--accent)" stroke-width="1" opacity="0.5"
+                    pointer-events="none"
+                  />
+                  <circle
+                    :cx="pt.x + pt.handleOut.x" :cy="pt.y + pt.handleOut.y"
+                    r="3" fill="white" stroke="var(--accent)" stroke-width="1.5"
+                    style="cursor: grab"
+                    @mousedown.stop="motionPathEditor?.startHandleDrag(mp.id, i, 'out', $event)"
+                  />
+                </template>
+              </template>
+              <!-- Control point diamonds -->
+              <circle
+                v-for="(pt, i) in mp.points"
+                :key="'pt-' + i"
+                :cx="pt.x" :cy="pt.y"
+                r="5"
+                :fill="motionPathEditor?.selectedPoint.value?.pathId === mp.id && motionPathEditor?.selectedPoint.value?.idx === i ? 'white' : 'var(--accent)'"
+                :stroke="motionPathEditor?.selectedPoint.value?.pathId === mp.id && motionPathEditor?.selectedPoint.value?.idx === i ? 'var(--accent)' : 'white'"
+                stroke-width="1.5"
+                style="cursor: grab"
+                @mousedown.stop="motionPathEditor?.startPathPointDrag(mp.id, i, $event)"
+              />
+            </g>
+          </g>
+        </template>
+
+        <!-- Motion path drawing preview -->
+        <template v-if="motionPathTool?.isDrawing.value">
+          <!-- Preview path line -->
+          <path
+            v-if="motionPathTool.previewD.value"
+            :d="motionPathTool.previewD.value"
+            fill="none"
+            stroke="var(--accent)"
+            stroke-width="1.5"
+            stroke-dasharray="4 3"
+            opacity="0.7"
+            pointer-events="none"
+          />
+          <!-- Anchor points + bezier handle lines/dots -->
+          <template>
+            <template v-for="(pt, i) in motionPathTool.rawPoints.value" :key="'ph-' + i">
+              <template v-if="motionPathTool.penHandles.value.get(i)">
+                <!-- Handle out -->
+                <line
+                  :x1="pt.x" :y1="pt.y"
+                  :x2="pt.x + motionPathTool.penHandles.value.get(i)!.out.x"
+                  :y2="pt.y + motionPathTool.penHandles.value.get(i)!.out.y"
+                  stroke="var(--accent)" stroke-width="1" opacity="0.5"
+                  pointer-events="none"
+                />
+                <circle
+                  :cx="pt.x + motionPathTool.penHandles.value.get(i)!.out.x"
+                  :cy="pt.y + motionPathTool.penHandles.value.get(i)!.out.y"
+                  r="3" fill="white" stroke="var(--accent)" stroke-width="1.5"
+                  pointer-events="none"
+                />
+                <!-- Handle in (mirrored) -->
+                <line
+                  :x1="pt.x" :y1="pt.y"
+                  :x2="pt.x - motionPathTool.penHandles.value.get(i)!.out.x"
+                  :y2="pt.y - motionPathTool.penHandles.value.get(i)!.out.y"
+                  stroke="var(--accent)" stroke-width="1" opacity="0.5"
+                  pointer-events="none"
+                />
+                <circle
+                  :cx="pt.x - motionPathTool.penHandles.value.get(i)!.out.x"
+                  :cy="pt.y - motionPathTool.penHandles.value.get(i)!.out.y"
+                  r="3" fill="white" stroke="var(--accent)" stroke-width="1.5"
+                  pointer-events="none"
+                />
+              </template>
+            </template>
+            <!-- Anchor point circles (green ring on first = start) -->
+            <circle
+              v-for="(pt, i) in motionPathTool.rawPoints.value"
+              :key="'pp-' + i"
+              :cx="pt.x" :cy="pt.y"
+              r="4"
+              :fill="i === 0 ? 'none' : 'var(--accent)'"
+              :stroke="i === 0 ? '#22c55e' : 'white'"
+              :stroke-width="i === 0 ? 2.5 : 1.5"
+              pointer-events="none"
+            />
+          </template>
+        </template>
       </svg>
+
+      <!-- Motion path drawing status hint -->
+      <div
+        v-if="motionPathTool?.isDrawing.value"
+        class="mp-hint"
+      >
+        Click to add · Click+drag for smooth · Double-click or ↩ to finish · Esc to cancel
+      </div>
 
       <!-- HUD overlays -->
       <div class="c-info">
@@ -541,4 +957,19 @@ defineExpose({ viewportEl })
 }
 .z-btn:hover { background: var(--bg-4); color: var(--text-1); }
 .z-pct { min-width: 40px; }
+
+.mp-hint {
+  position: absolute;
+  bottom: 2.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.6875rem;
+  color: var(--text-3);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 0.25rem 0.625rem;
+  pointer-events: none;
+  white-space: nowrap;
+}
 </style>

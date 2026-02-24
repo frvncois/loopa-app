@@ -62,8 +62,6 @@ function setPtType(val: string) {
 
 <template>
   <div v-if="selectedEl" class="section">
-    <div class="title">Path</div>
-
     <div class="row">
       <span class="label">Points</span>
       <span class="meta-val">{{ selectedEl.points.length }}</span>
@@ -122,7 +120,7 @@ function setPtType(val: string) {
 </template>
 
 <style scoped>
-.section { padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border); }
+.section { padding: 0.375rem 0.75rem 0.625rem; }
 .title { font-size: 0.6875rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.375rem; }
 .row {
   display: flex;

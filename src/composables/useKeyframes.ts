@@ -15,7 +15,7 @@ export function useKeyframes(
 ) {
   /** Record current element state as a keyframe at currentFrame for all selected elements */
   function addKeyframeForSelected(): void {
-    const frame = timelineStore.currentFrame
+    const frame = Math.round(timelineStore.currentFrame)
     const newIds: string[] = []
     for (const id of uiStore.selectedIds) {
       const el = editorStore.getElementById(id)
@@ -32,6 +32,9 @@ export function useKeyframes(
           width: el.width,
           height: el.height,
           rotation: el.rotation,
+          rotateX: el.rotateX ?? 0,
+          rotateY: el.rotateY ?? 0,
+          perspective: el.perspective ?? 800,
           scaleX: el.scaleX,
           scaleY: el.scaleY,
           opacity: el.opacity,
@@ -40,8 +43,16 @@ export function useKeyframes(
           transformOriginY: (el as any).transformOrigin?.y ?? 0.5,
           ...(el.fills[0]?.visible ? { fillColor: el.fills[0].color, fillOpacity: el.fills[0].opacity } : {}),
           ...(el.strokes[0]?.visible ? { strokeColor: el.strokes[0].color, strokeWidth: el.strokes[0].width } : {}),
+          ...(el.shadows?.[0] ? {
+            shadowOffsetX: el.shadows[0].x ?? 0,
+            shadowOffsetY: el.shadows[0].y ?? 0,
+            shadowBlur: el.shadows[0].blur ?? 0,
+            shadowOpacity: el.shadows[0].opacity ?? 0.25,
+            shadowColor: el.shadows[0].color ?? '000000',
+          } : {}),
           ...(el.type === 'text' ? { fontSize: (el as any).fontSize } : {}),
           ...(el.type === 'rect' ? { rx: (el as any).rx ?? 0 } : {}),
+          ...(el.type === 'path' ? { d: (el as any).d } : {}),
         },
         easing: 'ease-out',
       })

@@ -9,7 +9,11 @@ const props = defineProps<{
 </script>
 
 <template>
-  <g pointer-events="all">
+  <!-- When path uses relative coords, translate so handles render at correct SVG position -->
+  <g
+    :transform="(path as any).relativePoints ? `translate(${path.x} ${path.y})` : undefined"
+    pointer-events="all"
+  >
     <template v-for="pt in path.points" :key="pt.id">
       <!-- HandleIn line + knob -->
       <g v-if="pt.handleIn">

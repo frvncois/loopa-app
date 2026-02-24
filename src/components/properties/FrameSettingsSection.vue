@@ -30,7 +30,6 @@ function update(key: keyof typeof frame.value, val: string | number) {
 
 <template>
   <div v-if="frame" class="section">
-    <div class="title">Frame</div>
     <div class="row">
       <span class="label">Name</span>
       <input
@@ -76,8 +75,7 @@ function update(key: keyof typeof frame.value, val: string | number) {
 </template>
 
 <style scoped>
-.section { padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border); }
-.title { font-size: 0.575rem; font-weight: 600; text-transform: uppercase; color: var(--text-2); margin-bottom: 0.5rem; letter-spacing: 0.07em;}
+.section { padding: 0.375rem 0.75rem 0.625rem; }
 .row {
   display: flex; align-items: center; gap: 0.375rem; min-height: 1.625rem; margin-bottom: 0.25rem;
   &:last-child { margin-bottom: 0; }

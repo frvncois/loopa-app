@@ -1,4 +1,4 @@
-export type ElementType = 'rect' | 'circle' | 'ellipse' | 'line' | 'polygon' | 'star' | 'text' | 'path' | 'group' | 'video' | 'image'
+export type ElementType = 'rect' | 'ellipse' | 'line' | 'polygon' | 'star' | 'text' | 'path' | 'group' | 'video' | 'image'
 
 export interface FillEntry {
   id: string
@@ -42,6 +42,9 @@ export interface BaseElement {
   width: number
   height: number
   rotation: number
+  rotateX: number       // CSS-style 3D tilt around X axis (degrees)
+  rotateY: number       // CSS-style 3D tilt around Y axis (degrees)
+  perspective: number   // CSS perspective depth in px (0 = flat, 800 = default)
   scaleX: number
   scaleY: number
   opacity: number
@@ -70,10 +73,6 @@ export interface RectElement extends BaseElement {
   radiusBottomRight: number
   radiusBottomLeft: number
   radiusLinked: boolean
-}
-
-export interface CircleElement extends BaseElement {
-  type: 'circle'
 }
 
 export interface EllipseElement extends BaseElement {
@@ -124,6 +123,7 @@ export interface PathElement extends BaseElement {
   closed: boolean
   d: string
   fillRule: 'nonzero' | 'evenodd'
+  relativePoints?: boolean  // if true, points are relative to (el.x, el.y); rendered with translate()
 }
 
 export interface GroupElement extends BaseElement {
@@ -166,6 +166,6 @@ export interface ImageElement extends BaseElement {
 }
 
 export type Element =
-  | RectElement | CircleElement | EllipseElement | LineElement
+  | RectElement | EllipseElement | LineElement
   | PolygonElement | StarElement | TextElement | PathElement
   | GroupElement | VideoElement | ImageElement

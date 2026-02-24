@@ -3,11 +3,13 @@ import type { useEditorStore } from '@/stores/editorStore'
 import type { Element } from '@/types/elements'
 import type { Keyframe } from '@/types/animation'
 import type { Frame } from '@/types/frame'
+import type { MotionPath } from '@/types/motionPath'
 
 interface Snapshot {
   frames: Frame[]
   elements: Element[]
   keyframes: Keyframe[]
+  motionPaths: MotionPath[]
 }
 
 const MAX_SNAPSHOTS = 100
@@ -20,9 +22,10 @@ export function useHistory(editor: ReturnType<typeof useEditorStore>) {
 
   function snapshot(): Snapshot {
     return {
-      frames: JSON.parse(JSON.stringify(editor.frames)),
-      elements: JSON.parse(JSON.stringify(editor.elements)),
-      keyframes: JSON.parse(JSON.stringify(editor.keyframes)),
+      frames:      JSON.parse(JSON.stringify(editor.frames)),
+      elements:    JSON.parse(JSON.stringify(editor.elements)),
+      keyframes:   JSON.parse(JSON.stringify(editor.keyframes)),
+      motionPaths: JSON.parse(JSON.stringify(editor.motionPaths)),
     }
   }
 
@@ -30,6 +33,7 @@ export function useHistory(editor: ReturnType<typeof useEditorStore>) {
     editor.frames.splice(0, editor.frames.length, ...snap.frames)
     editor.elements.splice(0, editor.elements.length, ...snap.elements)
     editor.keyframes.splice(0, editor.keyframes.length, ...snap.keyframes)
+    editor.motionPaths.splice(0, editor.motionPaths.length, ...(snap.motionPaths ?? []))
   }
 
   /** Push an immediate snapshot (for discrete actions like addElement). */
@@ -57,7 +61,6 @@ export function useHistory(editor: ReturnType<typeof useEditorStore>) {
 
   function undo() {
     if (cursor.value <= 0) return
-    // If at the tip and no initial snapshot yet, push current state first
     cursor.value--
     restore(stack.value[cursor.value])
   }

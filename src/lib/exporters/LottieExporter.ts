@@ -6,7 +6,7 @@
  */
 import type {
   Element, RectElement, EllipseElement, PolygonElement,
-  StarElement, PathElement
+  StarElement, PathElement, GroupElement
 } from '@/types/elements'
 import type { Keyframe, AnimatableProps, EasingType } from '@/types/animation'
 import type { ExportPayload, LottieExportOptions } from '@/types/export'
@@ -155,6 +155,8 @@ function buildKs(el: Element, kfs: Keyframe[], totalFrames: number): object {
   const hasRotAnim = kfs.some(k => k.props.rotation !== undefined)
   const hasScaleAnim = kfs.some(k => k.props.scaleX !== undefined || k.props.scaleY !== undefined)
   const hasOpacityAnim = kfs.some(k => k.props.opacity !== undefined)
+  const hasRxAnim = kfs.some(k => k.props.rotateX !== undefined)
+  const hasRyAnim = kfs.some(k => k.props.rotateY !== undefined)
 
   // Anchor point: transform origin in local pixel coords
   const originX = (el as any).transformOrigin?.x ?? 0.5
@@ -192,13 +194,27 @@ function buildKs(el: Element, kfs: Keyframe[], totalFrames: number): object {
     ? animatedVal(kfs, totalFrames, (p, e) => (p.opacity ?? e.opacity) * 100, el)
     : staticVal(el.opacity * 100)
 
-  return {
+  const elRx = (el as any).rotateX ?? 0
+  const elRy = (el as any).rotateY ?? 0
+  const rotateX = hasRxAnim
+    ? animatedVal(kfs, totalFrames, (p, e) => p.rotateX ?? (e as any).rotateX ?? 0, el)
+    : staticVal(elRx)
+  const rotateY = hasRyAnim
+    ? animatedVal(kfs, totalFrames, (p, e) => p.rotateY ?? (e as any).rotateY ?? 0, el)
+    : staticVal(elRy)
+
+  const ks: Record<string, unknown> = {
     o: opacity,
     r: rotation,
     p: pos,
     a: staticVal([anchorX, anchorY, 0]),
     s: scale,
   }
+  if (elRx !== 0 || elRy !== 0 || hasRxAnim || hasRyAnim) {
+    ks.rx = rotateX
+    ks.ry = rotateY
+  }
+  return ks
 }
 
 // ── Per-type shape generators ─────────────────────────────────────────────────
@@ -382,7 +398,7 @@ function buildLayer(
   let shapes: object[] = []
 
   if (el.type === 'rect')    shapes = makeRect(el, kfs, totalFrames)
-  else if (el.type === 'circle' || el.type === 'ellipse') shapes = makeEllipse(el, kfs, totalFrames)
+  else if (el.type === 'ellipse') shapes = makeEllipse(el, kfs, totalFrames)
   else if (el.type === 'polygon') shapes = makePolygon(el, kfs, totalFrames)
   else if (el.type === 'star')    shapes = makeStar(el, kfs, totalFrames)
   else if (el.type === 'path')    shapes = makePath(el, kfs, totalFrames)
@@ -391,8 +407,11 @@ function buildLayer(
     shapes = makeRect(el, kfs, totalFrames)
   }
 
+  const is3d = ((el as any).rotateX ?? 0) !== 0 || ((el as any).rotateY ?? 0) !== 0
+    || kfs.some(k => k.props.rotateX !== undefined || k.props.rotateY !== undefined)
+
   return {
-    ddd: 0,
+    ddd: is3d ? 1 : 0,
     ind: index,
     ty: 4,
     nm: el.name,
@@ -419,14 +438,22 @@ export const LottieExporter: BaseExporter = {
 
     elements.forEach((el, i) => {
       if (el.type === 'text') {
-        warnings.push(`Text element "${el.name}" was skipped (not supported in Lottie V1 export).`)
+        warnings.push(`Text element "${el.name}" was skipped (text is not yet supported in Lottie export).`)
         return
       }
       if (el.type === 'video') {
         warnings.push(`Video element "${el.name}" was skipped (video layers are not supported in Lottie format).`)
         return
       }
-      if (el.type === 'group') return  // groups are organizational; children export as individual layers
+      if (el.type === 'group') {
+        if ((el as GroupElement).hasMask) {
+          warnings.push(`"${el.name}": mask clip effect is not supported in Lottie export. Children are exported as flat layers.`)
+        }
+        return  // groups are organizational; children export as individual layers
+      }
+      if (el.type === 'line') {
+        warnings.push(`"${el.name}": line elements are approximated as rectangles in Lottie export.`)
+      }
       const layer = buildLayer(el, i + 1, keyframes, totalFrames)
       if (layer) layers.push(layer)
     })
@@ -443,7 +470,10 @@ export const LottieExporter: BaseExporter = {
       assets: [],
       layers: layers.reverse(), // Lottie renders top layer first = highest z-index
       markers: [],
-      ...(opts.loop ? {} : {}),
+    }
+
+    if (warnings.length > 0) {
+      console.warn('[LottieExporter] Export warnings:\n' + warnings.map(w => `  • ${w}`).join('\n'))
     }
 
     return opts.prettyPrint

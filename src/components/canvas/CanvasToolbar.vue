@@ -6,7 +6,6 @@ import type { ToolType } from '@/types/tools'
 import type { useCropTool } from '@/composables/useCropTool'
 import IconCursor from '@/components/icons/IconCursor.vue'
 import IconRect from '@/components/icons/IconRect.vue'
-import IconCircle from '@/components/icons/IconCircle.vue'
 import IconEllipse from '@/components/icons/IconEllipse.vue'
 import IconLine from '@/components/icons/IconLine.vue'
 import IconPen from '@/components/icons/IconPen.vue'
@@ -21,8 +20,7 @@ const cropTool = inject<ReturnType<typeof useCropTool> | null>('cropTool', null)
 const tools: { id: ToolType; title: string; key: string; icon: Component }[] = [
   { id: 'select', title: 'Select (V)', key: 'V', icon: IconCursor },
   { id: 'rect', title: 'Rectangle (R)', key: 'R', icon: IconRect },
-  { id: 'circle', title: 'Circle (C)', key: 'C', icon: IconCircle },
-  { id: 'ellipse', title: 'Ellipse (E)', key: 'E', icon: IconEllipse },
+  { id: 'ellipse', title: 'Ellipse (E) — hold Shift for circle', key: 'E', icon: IconEllipse },
   { id: 'line', title: 'Line (L)', key: 'L', icon: IconLine },
   { id: 'pen', title: 'Pen (P)', key: 'P', icon: IconPen },
   { id: 'text', title: 'Text (T)', key: 'T', icon: IconText },

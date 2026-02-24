@@ -45,7 +45,6 @@ function resetCrop() {
 <template>
   <div v-if="el && (hasCrop || isEditing)" class="section">
     <div class="title-row">
-      <span class="title">Crop</span>
       <template v-if="isEditing">
         <button class="chip is-apply" @click="applyAndExit">Apply</button>
         <button class="chip" @click="cancelCrop">Cancel</button>
@@ -86,20 +85,13 @@ function resetCrop() {
 
 <style scoped>
 .section {
-  padding: 0.625rem 0.75rem;
-  border-bottom: 1px solid var(--border);
+  padding: 0.375rem 0.75rem 0.625rem;
 }
 .title-row {
   display: flex;
   align-items: center;
   gap: 0.375rem;
   margin-bottom: 0.375rem;
-}
-.title {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: var(--text-2);
-  flex: 1;
 }
 .chip {
   height: 1.25rem;

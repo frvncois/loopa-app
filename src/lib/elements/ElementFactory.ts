@@ -1,6 +1,6 @@
 import type {
   Element, ElementType,
-  RectElement, CircleElement, EllipseElement, LineElement,
+  RectElement, EllipseElement, LineElement,
   PolygonElement, StarElement, TextElement, PathElement, GroupElement,
   FillEntry, StrokeEntry, ShadowEntry
 } from '@/types/elements'
@@ -36,7 +36,8 @@ function base(type: ElementType, x = 200, y = 200, w = 100, h = 100): Omit<Eleme
     type,
     name: nextName(type),
     x, y, width: w, height: h,
-    rotation: 0, scaleX: 1, scaleY: 1,
+    rotation: 0, rotateX: 0, rotateY: 0, perspective: 800,
+    scaleX: 1, scaleY: 1,
     opacity: 1, blendMode: 'normal',
     fills: [defaultFill()],
     strokes: [defaultStroke()],
@@ -57,13 +58,6 @@ export function createDefaultElement(type: ElementType): Element {
         radiusTopLeft: 4, radiusTopRight: 4,
         radiusBottomRight: 4, radiusBottomLeft: 4,
         radiusLinked: true
-      }
-      return el
-    }
-    case 'circle': {
-      const el: CircleElement = {
-        ...(base('circle', 200, 200, 100, 100) as any),
-        type: 'circle'
       }
       return el
     }

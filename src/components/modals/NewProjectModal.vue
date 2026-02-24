@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseToggle from '@/components/ui/BaseToggle.vue'
@@ -20,27 +20,131 @@ const activeTab = ref<'blank' | 'figma'>('blank')
 
 // ── Blank tab ──────────────────────────────────────────────────
 
-const name   = ref('My Animation')
-const width  = ref(800)
-const height = ref(600)
+interface SizePreset {
+  name: string
+  width: number
+  height: number
+}
 
-const PRESETS = [
-  { label: '800 × 600',   w: 800,  h: 600  },
-  { label: '1920 × 1080', w: 1920, h: 1080 },
-  { label: '1280 × 720',  w: 1280, h: 720  },
-  { label: '400 × 400',   w: 400,  h: 400  },
-  { label: '500 × 500',   w: 500,  h: 500  },
+interface PresetCategory {
+  name: string
+  presets: SizePreset[]
+}
+
+const PRESET_CATEGORIES: PresetCategory[] = [
+  {
+    name: 'Screen',
+    presets: [
+      { name: 'Desktop',        width: 1440, height: 900  },
+      { name: 'Desktop HD',     width: 1920, height: 1080 },
+      { name: 'MacBook Pro 14"', width: 1512, height: 982  },
+      { name: 'MacBook Pro 16"', width: 1728, height: 1117 },
+      { name: 'iMac',           width: 2560, height: 1440 },
+      { name: 'Tablet',         width: 1024, height: 768  },
+      { name: 'iPad Pro 11"',   width: 1194, height: 834  },
+      { name: 'iPad Pro 12.9"', width: 1366, height: 1024 },
+      { name: 'Surface Pro',    width: 1368, height: 912  },
+    ]
+  },
+  {
+    name: 'Phone',
+    presets: [
+      { name: 'iPhone 16',         width: 393, height: 852 },
+      { name: 'iPhone 16 Pro Max', width: 440, height: 956 },
+      { name: 'iPhone SE',         width: 375, height: 667 },
+      { name: 'Android Small',     width: 360, height: 800 },
+      { name: 'Android Large',     width: 412, height: 915 },
+    ]
+  },
+  {
+    name: 'Social Media',
+    presets: [
+      { name: 'Instagram Post',    width: 1080, height: 1080 },
+      { name: 'Instagram Story',   width: 1080, height: 1920 },
+      { name: 'Instagram Reel',    width: 1080, height: 1920 },
+      { name: 'TikTok',            width: 1080, height: 1920 },
+      { name: 'Facebook Post',     width: 1200, height: 630  },
+      { name: 'Facebook Story',    width: 1080, height: 1920 },
+      { name: 'Facebook Cover',    width: 1640, height: 624  },
+      { name: 'X / Twitter Post',  width: 1200, height: 675  },
+      { name: 'X / Twitter Header', width: 1500, height: 500 },
+      { name: 'LinkedIn Post',     width: 1200, height: 627  },
+      { name: 'LinkedIn Cover',    width: 1584, height: 396  },
+      { name: 'YouTube Thumbnail', width: 1280, height: 720  },
+      { name: 'Pinterest Pin',     width: 1000, height: 1500 },
+    ]
+  },
+  {
+    name: 'Presentation',
+    presets: [
+      { name: 'Slide 16:9',  width: 1920, height: 1080 },
+      { name: 'Slide 4:3',   width: 1024, height: 768  },
+      { name: 'Slide 16:10', width: 1920, height: 1200 },
+    ]
+  },
+  {
+    name: 'Banner',
+    presets: [
+      { name: 'Leaderboard',       width: 728, height: 90  },
+      { name: 'Medium Rectangle',  width: 300, height: 250 },
+      { name: 'Wide Skyscraper',   width: 160, height: 600 },
+      { name: 'Large Rectangle',   width: 336, height: 280 },
+      { name: 'Full Banner',       width: 468, height: 60  },
+      { name: 'Half Page',         width: 300, height: 600 },
+    ]
+  },
+  {
+    name: 'Custom',
+    presets: [],
+  },
 ]
 
-function applyPreset(w: number, h: number) {
-  width.value  = w
-  height.value = h
+const nameInputRef = ref<HTMLInputElement>()
+const name         = ref('My Animation')
+const activeCategory  = ref('Social Media')
+const selectedPreset  = ref<SizePreset | null>(null)
+const customWidth  = ref(1080)
+const customHeight = ref(1080)
+
+const activePresets = computed(() => {
+  const cat = PRESET_CATEGORIES.find(c => c.name === activeCategory.value)
+  return cat?.presets ?? []
+})
+
+function selectPreset(preset: SizePreset) {
+  selectedPreset.value = preset
+  customWidth.value    = preset.width
+  customHeight.value   = preset.height
+}
+
+function previewStyle(preset: SizePreset): Record<string, string> {
+  const maxW   = 64
+  const maxH   = 48
+  const aspect = preset.width / preset.height
+  let w: number, h: number
+  if (aspect > maxW / maxH) {
+    w = maxW
+    h = maxW / aspect
+  } else {
+    h = maxH
+    w = maxH * aspect
+  }
+  return { width: `${w}px`, height: `${h}px` }
 }
 
 function onCreate() {
-  if (!name.value.trim()) return
-  emit('create', name.value.trim(), width.value, height.value)
+  const n = name.value.trim() || 'My Animation'
+  const w = customWidth.value  || 1080
+  const h = customHeight.value || 1080
+  emit('create', n, w, h)
 }
+
+// Deselect preset when custom inputs diverge
+watch([customWidth, customHeight], ([w, h]) => {
+  if (selectedPreset.value && (selectedPreset.value.width !== w || selectedPreset.value.height !== h)) {
+    selectedPreset.value = null
+  }
+})
 
 // ── Figma tab ──────────────────────────────────────────────────
 
@@ -50,11 +154,9 @@ const figmaLink  = ref('')
 const figmaName  = ref('')
 const isCreating = ref(false)
 
-// Auto-fill project name when file structure is loaded
 watch(() => figma.fileStructure.value, (fs) => {
   if (fs) figmaName.value = fs.name
 })
-
 
 async function onFigmaLinkLoad() {
   await figma.loadFileStructure(figmaLink.value.trim())
@@ -68,32 +170,43 @@ async function onCreateFromFigma() {
     emit('createFromFigma', figmaName.value.trim(), frames, elements)
   } catch (e) {
     figma.error.value = e instanceof Error ? e.message : 'Import failed'
-    figma.step.value = 'browse'
+    figma.step.value  = 'browse'
   } finally {
     isCreating.value = false
   }
 }
 
-// ── Reset on close ─────────────────────────────────────────────
+// ── Reset on open / close ─────────────────────────────────────
 
 watch(() => props.open, (open) => {
-  if (!open) resetAll()
+  if (open) {
+    name.value           = 'My Animation'
+    activeCategory.value = 'Social Media'
+    selectedPreset.value = null
+    customWidth.value    = 1080
+    customHeight.value   = 1080
+    nextTick(() => nameInputRef.value?.focus())
+  } else {
+    resetAll()
+  }
 })
 
 function resetAll() {
-  activeTab.value  = 'blank'
-  name.value       = 'My Animation'
-  width.value      = 800
-  height.value     = 600
-  figmaLink.value  = ''
-  figmaName.value  = ''
-  isCreating.value = false
+  activeTab.value      = 'blank'
+  name.value           = 'My Animation'
+  activeCategory.value = 'Social Media'
+  selectedPreset.value = null
+  customWidth.value    = 1080
+  customHeight.value   = 1080
+  figmaLink.value      = ''
+  figmaName.value      = ''
+  isCreating.value     = false
   figma.resetToLink()
 }
 </script>
 
 <template>
-  <BaseModal :open="open" title="New Project" width="480px" @close="emit('close')">
+  <BaseModal :open="open" title="New Project" width="640px" @close="emit('close')">
 
     <!-- Tab switcher -->
     <div class="tabs">
@@ -102,28 +215,77 @@ function resetAll() {
     </div>
 
     <!-- ── Blank tab ── -->
-    <div v-if="activeTab === 'blank'" class="form">
-      <div class="field">
-        <label class="label">Project name</label>
-        <input v-model="name" class="input" type="text" placeholder="My Animation" />
+    <div v-if="activeTab === 'blank'">
+
+      <!-- Project name -->
+      <div class="field-group">
+        <label class="field-label">Project name</label>
+        <input
+          ref="nameInputRef"
+          v-model="name"
+          class="name-input"
+          type="text"
+          placeholder="My Animation"
+          @keydown.enter="onCreate"
+        />
       </div>
-      <div class="field">
-        <label class="label">Artboard size</label>
-        <div class="size-row">
-          <input v-model.number="width"  class="input is-compact" type="number" min="1" max="8192" />
-          <span class="times">×</span>
-          <input v-model.number="height" class="input is-compact" type="number" min="1" max="8192" />
+
+      <!-- Category tabs -->
+      <div class="category-tabs">
+        <button
+          v-for="cat in PRESET_CATEGORIES"
+          :key="cat.name"
+          class="cat-tab"
+          :class="{ 'is-active': activeCategory === cat.name }"
+          @click="activeCategory = cat.name"
+        >{{ cat.name }}</button>
+      </div>
+
+      <!-- Preset grid -->
+      <div v-if="activePresets.length > 0" class="preset-grid">
+        <button
+          v-for="preset in activePresets"
+          :key="preset.name"
+          class="preset-card"
+          :class="{ 'is-selected': selectedPreset?.name === preset.name }"
+          @click="selectPreset(preset)"
+        >
+          <div class="preset-preview">
+            <div class="preset-frame" :style="previewStyle(preset)" />
+          </div>
+          <div class="preset-name">{{ preset.name }}</div>
+          <div class="preset-size">{{ preset.width }}×{{ preset.height }}</div>
+        </button>
+      </div>
+
+      <!-- Custom size inputs -->
+      <div class="custom-size">
+        <span class="custom-label">{{ activePresets.length > 0 ? 'Or set custom size' : 'Set size' }}</span>
+        <div class="custom-inputs">
+          <div class="size-field">
+            <label class="size-label">Width</label>
+            <input
+              v-model.number="customWidth"
+              class="size-input"
+              type="number"
+              min="1"
+              max="10000"
+            />
+          </div>
+          <span class="size-x">×</span>
+          <div class="size-field">
+            <label class="size-label">Height</label>
+            <input
+              v-model.number="customHeight"
+              class="size-input"
+              type="number"
+              min="1"
+              max="10000"
+            />
+          </div>
         </div>
       </div>
-      <div class="presets">
-        <button
-          v-for="p in PRESETS"
-          :key="p.label"
-          class="chip"
-          :class="{ 'is-active': width === p.w && height === p.h }"
-          @click="applyPreset(p.w, p.h)"
-        >{{ p.label }}</button>
-      </div>
+
     </div>
 
     <!-- ── Figma tab ── -->
@@ -201,11 +363,11 @@ function resetAll() {
                 />
                 <span class="page-name">{{ page.name }}</span>
                 <span class="page-count">
-                  {{ page.children.filter(c => c.type === 'FRAME' || c.type === 'COMPONENT').length }}
+                  {{ page.children.filter((c: { type: string }) => c.type === 'FRAME' || c.type === 'COMPONENT').length }}
                 </span>
               </div>
               <div
-                v-for="frame in page.children.filter(c => c.type === 'FRAME' || c.type === 'COMPONENT')"
+                v-for="frame in page.children.filter((c: { type: string }) => c.type === 'FRAME' || c.type === 'COMPONENT')"
                 :key="frame.id"
                 class="frame-row"
                 :class="{ selected: figma.selectedNodeIds.value.has(frame.id) }"
@@ -258,7 +420,7 @@ function resetAll() {
     <!-- Footer -->
     <template #footer>
       <BaseButton variant="ghost" size="sm" @click="emit('close')">Cancel</BaseButton>
-      <BaseButton v-if="activeTab === 'blank'" variant="accent" size="sm" @click="onCreate">Create</BaseButton>
+      <BaseButton v-if="activeTab === 'blank'" variant="accent" size="sm" @click="onCreate">Create Project</BaseButton>
       <BaseButton
         v-else-if="figma.step.value === 'browse'"
         variant="accent"
@@ -277,7 +439,7 @@ function resetAll() {
 .tabs {
   display: flex;
   gap: 2px;
-  margin-bottom: 14px;
+  margin-bottom: 1rem;
   background: var(--bg-3);
   border-radius: var(--r-md);
   padding: 3px;
@@ -289,7 +451,7 @@ function resetAll() {
   border-radius: calc(var(--r-md) - 2px);
   background: transparent;
   color: var(--text-3);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   cursor: pointer;
   transition: all var(--ease);
@@ -297,11 +459,184 @@ function resetAll() {
   &.active { background: var(--bg-5); color: var(--text-1); }
 }
 
-/* ── Shared field / form styles ── */
-.form { display: flex; flex-direction: column; gap: 0.875rem; }
+/* ── Project name ── */
+.field-group { margin-bottom: 1rem; }
+
+.field-label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: 0.375rem;
+}
+
+.name-input {
+  width: 100%;
+  height: 2rem;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text-1);
+  padding: 0 0.625rem;
+  font-size: 0.8125rem;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 150ms var(--ease);
+  &:focus { border-color: var(--accent); }
+  &::placeholder { color: var(--text-4); }
+}
+
+/* ── Category tabs ── */
+.category-tabs {
+  display: flex;
+  gap: 0.125rem;
+  margin-bottom: 0.875rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+.cat-tab {
+  padding: 0.3125rem 0.625rem;
+  border: none;
+  background: none;
+  color: var(--text-3);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--r-md);
+  white-space: nowrap;
+  transition: all 150ms var(--ease);
+  &:hover { color: var(--text-1); background: var(--bg-4); }
+  &.is-active { color: var(--text-1); background: var(--accent-s); font-weight: 600; }
+}
+
+/* ── Preset grid ── */
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.25rem, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  max-height: 15rem;
+  overflow-y: auto;
+  padding: 0.125rem;
+}
+
+.preset-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.625rem 0.375rem;
+  background: var(--bg-3);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: all 150ms var(--ease);
+  &:hover { border-color: var(--accent); background: var(--bg-4); }
+  &.is-selected {
+    border-color: var(--accent);
+    background: var(--accent-s);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+}
+
+.preset-preview {
+  width: 4rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.125rem;
+}
+
+.preset-frame {
+  background: var(--bg-5);
+  border: 1px solid var(--border-l);
+  border-radius: 2px;
+  transition: background 150ms var(--ease);
+  .preset-card.is-selected & {
+    background: var(--accent);
+    border-color: var(--accent);
+    opacity: 0.5;
+  }
+}
+
+.preset-name {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--text-1);
+  text-align: center;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.preset-size {
+  font-size: 0.5625rem;
+  color: var(--text-4);
+  font-family: var(--mono);
+}
+
+/* ── Custom size ── */
+.custom-size {
+  border-top: 1px solid var(--border);
+  padding-top: 0.875rem;
+}
+
+.custom-label {
+  font-size: 0.6875rem;
+  color: var(--text-3);
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.custom-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.size-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.size-label {
+  font-size: 0.5625rem;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.size-input {
+  width: 6.25rem;
+  height: 1.875rem;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text-1);
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+  font-family: var(--mono);
+  outline: none;
+  &:focus { border-color: var(--accent); }
+}
+
+.size-x {
+  color: var(--text-4);
+  font-size: 0.75rem;
+  margin-top: 1rem;
+}
+
+/* ── Shared field styles (used by Figma tab) ── */
 .field { display: flex; flex-direction: column; gap: 0.3125rem; }
 .label { font-size: 0.75rem; font-weight: 500; color: var(--text-3); }
-.label-note { font-size: 0.625rem; color: var(--text-4); font-weight: 400; }
 .input {
   height: 1.875rem;
   background: var(--bg-3);
@@ -314,27 +649,6 @@ function resetAll() {
   box-sizing: border-box;
   transition: border-color var(--ease);
   &:focus { border-color: var(--accent); }
-  &.is-compact { width: 5rem; flex: none; font-family: var(--mono); }
-}
-.size-row { display: flex; align-items: center; gap: 0.5rem; }
-.times { font-size: 0.75rem; color: var(--text-4); }
-.presets { display: flex; flex-wrap: wrap; gap: 0.25rem; }
-.chip {
-  height: 1.375rem;
-  padding: 0 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bg-3);
-  color: var(--text-3);
-  font-size: 0.625rem;
-  cursor: pointer;
-  transition: all var(--ease);
-  font-family: var(--mono);
-  &:hover, &.is-active {
-    background: var(--accent-s);
-    color: var(--accent);
-    border-color: var(--accent);
-  }
 }
 .mt-10 { margin-top: 10px; }
 

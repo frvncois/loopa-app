@@ -3,6 +3,7 @@ import type { useEditorStore } from '@/stores/editorStore'
 import type { useUiStore } from '@/stores/uiStore'
 import type { useTimelineStore } from '@/stores/timelineStore'
 import { computeElementAtFrame } from '@/lib/engine/AnimationEngine'
+import { computeMotionPathPosition } from '@/lib/path/motionPathMath'
 import type { Element } from '@/types/elements'
 import type { AnimatableProps } from '@/types/animation'
 import { generateId } from '@/lib/utils/id'
@@ -17,6 +18,7 @@ export function useAnimatedEditing(
   timelineStore: TimelineStore
 ) {
   // Reactive map of elementId → animated props at current frame
+  // Includes both keyframe interpolation and motion path overrides.
   const animatedPropsMap = computed(() => {
     const frame = timelineStore.currentFrame
     const frameId = uiStore.activeFrameId
@@ -27,9 +29,19 @@ export function useAnimatedEditing(
     const elements = editorStore.getElementsForFrame(frameId)
     for (const el of elements) {
       const elKfs = keyframes.filter(kf => kf.elementId === el.id)
-      if (elKfs.length > 0) {
-        map.set(el.id, computeElementAtFrame(elKfs, frame))
+      let props: AnimatableProps = elKfs.length > 0 ? computeElementAtFrame(elKfs, frame) : {}
+
+      // Apply motion path offset (relative to element base position)
+      const mp = editorStore.motionPaths.find(m => m.elementId === el.id)
+      if (mp) {
+        const override = computeMotionPathPosition(mp, frame)
+        if (override) {
+          props = { ...props, x: el.x + override.x, y: el.y + override.y }
+          if (override.rotation !== undefined) props = { ...props, rotation: override.rotation }
+        }
       }
+
+      if (Object.keys(props).length > 0) map.set(el.id, props)
     }
     return map
   })

@@ -35,6 +35,9 @@ export interface AnimatableProps {
   points?: PathPoint[]
   transformOriginX?: number
   transformOriginY?: number
+  rotateX?: number
+  rotateY?: number
+  perspective?: number
 }
 
 export interface Keyframe {

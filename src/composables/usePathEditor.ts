@@ -3,6 +3,7 @@ import type { useEditorStore } from '@/stores/editorStore'
 import type { useUiStore } from '@/stores/uiStore'
 import type { useCanvas } from '@/composables/useCanvas'
 import type { PathPoint, PathElement } from '@/types/elements'
+import type { AnimatableProps } from '@/types/animation'
 import { pathPointsToD } from '@/lib/path/PathBuilder'
 
 type EditorStore = ReturnType<typeof useEditorStore>
@@ -13,7 +14,8 @@ export function usePathEditor(
   editor: EditorStore,
   ui: UiStore,
   canvas: Canvas,
-  onSave: () => void
+  onSave: () => void,
+  setAnimatedProp?: (id: string, props: Partial<AnimatableProps>) => void
 ) {
   /** The currently-selected anchor point ID in the editor */
   const editingPointId = ref<string | null>(null)
@@ -31,7 +33,13 @@ export function usePathEditor(
     const el = getEditingPath()
     if (!el) return
     const d = pathPointsToD(points, el.closed)
-    editor.updateElement(el.id, { points, d } as any)
+    if (setAnimatedProp) {
+      // Route d through animation system (creates keyframe when one exists at this frame)
+      setAnimatedProp(el.id, { d })
+      editor.updateElement(el.id, { points } as any)
+    } else {
+      editor.updateElement(el.id, { points, d } as any)
+    }
   }
 
   // ── Point dragging ───────────────────────────────────────────────

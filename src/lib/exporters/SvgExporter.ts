@@ -123,7 +123,8 @@ function buildRotationAnim(
   kfs: Keyframe[],
   totalFrames: number,
   fps: number,
-  loop: boolean
+  loop: boolean,
+  hasPositionAnim = false
 ): string {
   if (!kfs.some(k => k.props.rotation !== undefined)) return ''
   const sorted = [...kfs].sort((a, b) => a.frame - b.frame)
@@ -132,6 +133,13 @@ function buildRotationAnim(
 
   const oxN = (el as any).transformOrigin?.x ?? 0.5
   const oyN = (el as any).transformOrigin?.y ?? 0.5
+  // Known limitation: SMIL animateTransform requires a static rotation center.
+  // When position is also animated, the pivot stays locked to the base position,
+  // which produces an incorrect result. This is a fundamental SMIL constraint
+  // with no simple workaround (matrix animation would be required).
+  if (hasPositionAnim) {
+    console.warn(`[SvgExporter] "${el.name}": combined position + rotation animation has an incorrect pivot in SVG export. The rotation center is fixed to the base position.`)
+  }
   const cx = el.x + oxN * el.width
   const cy = el.y + oyN * el.height
 
@@ -196,23 +204,23 @@ function buildAnimatedElement(
   if (hasAnim('x')) {
     anims.push(buildAnim(el, kfs, totalFrames, fps, loop, 'x',
       (e, a) => {
-        if (e.type === 'circle' || e.type === 'ellipse') return null // uses cx/cy
+        if (e.type === 'ellipse') return null // uses cx/cy
         return String(Math.round(((a.x ?? e.x) * 1000)) / 1000)
       }))
   }
   if (hasAnim('y')) {
     anims.push(buildAnim(el, kfs, totalFrames, fps, loop, 'y',
       (e, a) => {
-        if (e.type === 'circle' || e.type === 'ellipse') return null
+        if (e.type === 'ellipse') return null
         return String(Math.round(((a.y ?? e.y) * 1000)) / 1000)
       }))
-    // For circle/ellipse, animate cy
-    if (el.type === 'circle' || el.type === 'ellipse') {
+    // For ellipse, animate cy
+    if (el.type === 'ellipse') {
       anims.push(buildAnim(el, kfs, totalFrames, fps, loop, 'cy',
         (e, a) => String(Math.round(((a.y ?? e.y) + (a.height ?? e.height) / 2) * 1000) / 1000)))
     }
   }
-  if (hasAnim('x') && (el.type === 'circle' || el.type === 'ellipse')) {
+  if (hasAnim('x') && el.type === 'ellipse') {
     anims.push(buildAnim(el, kfs, totalFrames, fps, loop, 'cx',
       (e, a) => String(Math.round(((a.x ?? e.x) + (a.width ?? e.width) / 2) * 1000) / 1000)))
   }
@@ -222,7 +230,7 @@ function buildAnimatedElement(
     if (el.type === 'rect') {
       anims.push(buildAnim(el, kfs, totalFrames, fps, loop, 'width',
         (e, a) => String(Math.round((a.width ?? e.width) * 1000) / 1000)))
-    } else if (el.type === 'circle' || el.type === 'ellipse') {
+    } else if (el.type === 'ellipse') {
       anims.push(buildAnim(el, kfs, totalFrames, fps, loop, 'rx',
         (e, a) => String(Math.round((a.width ?? e.width) / 2 * 1000) / 1000)))
     }
@@ -231,7 +239,7 @@ function buildAnimatedElement(
     if (el.type === 'rect') {
       anims.push(buildAnim(el, kfs, totalFrames, fps, loop, 'height',
         (e, a) => String(Math.round((a.height ?? e.height) * 1000) / 1000)))
-    } else if (el.type === 'circle' || el.type === 'ellipse') {
+    } else if (el.type === 'ellipse') {
       anims.push(buildAnim(el, kfs, totalFrames, fps, loop, 'ry',
         (e, a) => String(Math.round((a.height ?? e.height) / 2 * 1000) / 1000)))
     }
@@ -275,7 +283,7 @@ function buildAnimatedElement(
 
   // rotation (using animateTransform)
   if (hasAnim('rotation')) {
-    anims.push(buildRotationAnim(el, kfs, totalFrames, fps, loop))
+    anims.push(buildRotationAnim(el, kfs, totalFrames, fps, loop, hasAnim('x') || hasAnim('y')))
   }
 
   const filteredAnims = anims.filter(Boolean)

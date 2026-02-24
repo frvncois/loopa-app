@@ -7,7 +7,6 @@ const ui = useUiStore()
 
 <template>
   <div class="section">
-    <div class="title">Grid & Snap</div>
     <BaseToggle :model-value="ui.showGrid" label="Show grid" @update:model-value="ui.toggleGrid()" />
     <BaseToggle :model-value="ui.snapToGrid" label="Snap to grid" @update:model-value="ui.toggleSnap()" />
     <div class="row">
@@ -19,8 +18,7 @@ const ui = useUiStore()
 </template>
 
 <style scoped>
-.section { padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border); }
-.title { font-size: 0.75rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.25rem; }
+.section { padding: 0.375rem 0.75rem 0.625rem; }
 .row {
   display: flex; align-items: center; gap: 0.375rem; min-height: 1.625rem;
   margin-top: 0.125rem;

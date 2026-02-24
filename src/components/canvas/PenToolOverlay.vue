@@ -21,9 +21,29 @@ const lastPoint = computed(() => {
   return pts.length > 0 ? pts[pts.length - 1] : null
 })
 
+/** Show rubber-band from last point to cursor only when NOT placing a new point */
 const showPreviewLine = computed(() =>
   lastPoint.value !== null && pt.pendingAnchor.value === null
 )
+
+/**
+ * During handle drag: show the forming curve from the last confirmed point
+ * to the pending anchor using the handles being dragged.
+ */
+const pendingCurveD = computed(() => {
+  const anchor = pt.pendingAnchor.value
+  const pts    = pt.currentPoints.value
+  if (!anchor || pts.length === 0) return ''
+  const last = pts[pts.length - 1]
+  // cp1: last confirmed point's handleOut (or point itself if corner)
+  const cp1x = last.handleOut ? last.handleOut.x : last.x
+  const cp1y = last.handleOut ? last.handleOut.y : last.y
+  // cp2: mirror of pendingHandleOut (= handleIn of the point being placed)
+  const hOut = pt.pendingHandleOut.value
+  const cp2x = hOut ? anchor.x * 2 - hOut.x : anchor.x
+  const cp2y = hOut ? anchor.y * 2 - hOut.y : anchor.y
+  return `M ${last.x},${last.y} C ${cp1x},${cp1y} ${cp2x},${cp2y} ${anchor.x},${anchor.y}`
+})
 </script>
 
 <template>
@@ -38,15 +58,24 @@ const showPreviewLine = computed(() =>
       stroke-linecap="round"
     />
 
-    <!-- Preview line: last placed point → cursor -->
-    <line
+    <!-- Rubber-band: curve from last placed point to cursor (free movement only) -->
+    <path
       v-if="showPreviewLine && lastPoint"
-      :x1="lastPoint.x"
-      :y1="lastPoint.y"
-      :x2="pt.previewPos.value.x"
-      :y2="pt.previewPos.value.y"
+      :d="`M ${lastPoint.x},${lastPoint.y} C ${lastPoint.handleOut ? lastPoint.handleOut.x : lastPoint.x},${lastPoint.handleOut ? lastPoint.handleOut.y : lastPoint.y} ${pt.previewPos.value.x},${pt.previewPos.value.y} ${pt.previewPos.value.x},${pt.previewPos.value.y}`"
+      fill="none"
       stroke="#4353ff"
       stroke-width="1"
+      stroke-dasharray="4 3"
+      opacity="0.7"
+    />
+
+    <!-- Forming curve: last placed point → pending anchor (during handle drag) -->
+    <path
+      v-if="pendingCurveD"
+      :d="pendingCurveD"
+      fill="none"
+      stroke="#4353ff"
+      stroke-width="1.5"
       stroke-dasharray="4 3"
       opacity="0.7"
     />
@@ -102,7 +131,7 @@ const showPreviewLine = computed(() =>
       />
     </g>
 
-    <!-- Placed anchor points -->
+    <!-- Placed anchor points (first turns green when near-close) -->
     <circle
       v-for="(p, idx) in pt.currentPoints.value"
       :key="p.id"
@@ -110,20 +139,20 @@ const showPreviewLine = computed(() =>
       :cy="p.y"
       r="4"
       fill="white"
-      :stroke="idx === 0 && pt.currentPoints.value.length >= 3 ? '#34d399' : '#4353ff'"
+      :stroke="idx === 0 && pt.isNearFirstPoint.value ? '#34d399' : '#4353ff'"
       stroke-width="1.5"
     />
 
-    <!-- Closure indicator on first point -->
+    <!-- Close indicator ring: only shown when cursor is within close distance -->
     <circle
-      v-if="pt.currentPoints.value.length >= 3"
+      v-if="pt.isNearFirstPoint.value"
       :cx="pt.currentPoints.value[0].x"
       :cy="pt.currentPoints.value[0].y"
-      r="8"
+      :r="pt.closeThresholdSvg.value"
       fill="none"
       stroke="#34d399"
-      stroke-width="1"
-      opacity="0.6"
+      stroke-width="1.5"
+      opacity="0.7"
     />
   </g>
 </template>

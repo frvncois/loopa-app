@@ -24,6 +24,10 @@ import { useCropTool } from '@/composables/useCropTool'
 import { useAiAssistant } from '@/composables/useAiAssistant'
 import { useTransformOrigin } from '@/composables/useTransformOrigin'
 import { useFigmaSync } from '@/composables/useFigmaSync'
+import { useMotionPathTool } from '@/composables/useMotionPathTool'
+import { useMotionPathEditor } from '@/composables/useMotionPathEditor'
+import { useCustomFonts } from '@/composables/useCustomFonts'
+import { generateThumbnail } from '@/lib/render/ThumbnailGenerator'
 import AppTopbar from '@/components/layout/AppTopbar.vue'
 import ResizablePanel from '@/components/layout/ResizablePanel.vue'
 import LayerPanel from '@/components/layers/LayerPanel.vue'
@@ -67,11 +71,18 @@ const clipboard = useClipboard(editor, ui)
 const masking = useMasking()
 const cropTool = useCropTool(editor, ui, canvas)
 
-const shortcuts = useShortcuts(editor, ui, timeline, history, clipboard, selection, canvas, cropTool, masking)
+// Motion path system (must be before shortcuts so the tool can intercept keyboard)
+const motionPathTool = useMotionPathTool(editor, ui, timeline, canvas, () => history.save())
+const motionPathEditor = useMotionPathEditor(editor, canvas.zoom, () => history.save())
+
+const shortcuts = useShortcuts(editor, ui, timeline, history, clipboard, selection, canvas, cropTool, masking, animatedEditing.getAnimatedElement, animatedEditing.setAnimatedProperty, motionPathTool)
 
 // Path system
 const penTool = usePenTool(editor, ui, canvas, () => history.save())
-const pathEditor = usePathEditor(editor, ui, canvas, () => history.save())
+const pathEditor = usePathEditor(editor, ui, canvas, () => history.save(), animatedEditing.setAnimatedProperty)
+
+// Custom fonts
+const customFontsComposable = useCustomFonts()
 
 // Figma sync
 const figmaSync = useFigmaSync()
@@ -87,6 +98,8 @@ provide('setAnimatedProperty', animatedEditing.setAnimatedProperty)
 provide('cropTool', cropTool)
 provide('history', history)
 provide('aiAssistant', aiAssistant)
+provide('motionPathTool', motionPathTool)
+provide('customFonts', customFontsComposable)
 
 // ── Template refs ─────────────────────────────────────────────
 const canvasVpRef = ref<InstanceType<typeof CanvasViewport> | null>(null)
@@ -106,11 +119,12 @@ let unsubscribeActions: (() => void) | null = null
 function wireHistory() {
   unsubscribeActions = editor.$onAction(({ name, after }) => {
     after(() => {
-      if (name === 'updateElement' || name === 'updateKeyframe') {
+      if (name === 'updateElement' || name === 'updateKeyframe' || name === 'updateMotionPath') {
         history.saveDebounced()
       } else if (['addElement', 'deleteElements', 'reorderElement',
                   'addKeyframe', 'deleteKeyframe', 'deleteKeyframesForElement',
-                  'duplicateElements', 'groupElements', 'ungroupElements'].includes(name)) {
+                  'duplicateElements', 'groupElements', 'ungroupElements',
+                  'addMotionPath', 'deleteMotionPath'].includes(name)) {
         history.save()
       }
     })
@@ -121,6 +135,9 @@ function wireHistory() {
 watch(() => ui.currentTool, (tool) => {
   if (tool !== 'pen' && penTool.isDrawingPath.value) {
     penTool.cancel()
+  }
+  if (tool !== 'motion-path' && motionPathTool.isDrawing.value) {
+    motionPathTool.cancel()
   }
 })
 
@@ -165,6 +182,7 @@ onMounted(() => {
   history.seed()
   wireHistory()
   shortcuts.register()
+  customFontsComposable.loadAll()
 
   window.addEventListener('loopa:addKeyframe', onAddKeyframe as EventListener)
   window.addEventListener('loopa:deletePathPoint', onDeletePathPoint as EventListener)
@@ -185,13 +203,82 @@ function onDeletePathPoint() {
   pathEditor.deleteSelectedPoint()
 }
 
+// ── Convert text to path ───────────────────────────────────────
+async function convertSelectedTextToPath() {
+  const selId = [...ui.selectedIds][0]
+  if (!selId) return
+  const textEl = editor.getElementById(selId)
+  if (!textEl || textEl.type !== 'text') return
+
+  const buffer = await customFontsComposable.getFontBuffer(
+    (textEl as any).fontFamily ?? 'DM Sans',
+    (textEl as any).fontWeight ?? 400
+  )
+  if (!buffer) {
+    alert('Upload the font file (.ttf / .otf) via the font picker to enable text-to-path conversion.')
+    return
+  }
+
+  const { loadOpentype } = await import('@/lib/utils/opentypeLoader')
+  const { convertTextToPaths } = await import('@/lib/text/textToPath')
+  const { generateId } = await import('@/lib/utils/id')
+  const opentype = await loadOpentype()
+  const font = opentype.parse(buffer)
+
+  const frameId = ui.activeFrameId ?? ''
+  const pathEls = convertTextToPaths(textEl as any, font)
+  if (pathEls.length === 0) return
+
+  // Pause history subscription during bulk operation
+  unsubscribeActions?.()
+  try {
+    for (const pathEl of pathEls) {
+      editor.addElement(pathEl, frameId)
+    }
+
+    let targetId: string
+    if (pathEls.length >= 2) {
+      const groupId = editor.groupElements(pathEls.map(p => p.id))
+      if (!groupId) {
+        editor.deleteElements(pathEls.map(p => p.id))
+        return
+      }
+      targetId = groupId
+    } else {
+      targetId = pathEls[0].id
+    }
+
+    // Transfer animatable keyframes (position, opacity, transform) to new element
+    const transferProps = new Set(['x', 'y', 'opacity', 'rotation', 'scaleX', 'scaleY', 'blur'])
+    for (const kf of editor.keyframes.filter(k => k.elementId === selId)) {
+      const filteredProps = Object.fromEntries(
+        Object.entries(kf.props).filter(([k]) => transferProps.has(k))
+      )
+      if (Object.keys(filteredProps).length > 0) {
+        editor.addKeyframe({
+          ...kf,
+          id: generateId('kf'),
+          elementId: targetId,
+          props: filteredProps,
+        })
+      }
+    }
+
+    editor.deleteElements([selId])
+    ui.select(targetId)
+  } finally {
+    wireHistory()
+    history.save()
+  }
+}
+
 // ── Auto-save (debounced 2s) ──────────────────────────────────
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let savedTimer: ReturnType<typeof setTimeout> | null = null
 const saveState = ref<'idle' | 'saving' | 'saved'>('idle')
 
 watch(
-  [() => editor.elements, () => editor.keyframes, () => editor.frames],
+  [() => editor.elements, () => editor.keyframes, () => editor.frames, () => editor.motionPaths],
   () => {
     if (!editor.projectId) return
     if (saveTimer) clearTimeout(saveTimer)
@@ -205,17 +292,30 @@ function save() {
   if (!editor.projectId) return
   const existing = projects.loadProjectData(editor.projectId)
   if (!existing) return
-  // Keep meta artboard dims in sync with first frame
+  // Keep meta artboard dims in sync with first frame, and regenerate thumbnail
   const firstFrame = editor.frames.find(f => f.order === 0)
-  const updatedMeta = firstFrame
-    ? { ...existing.meta, artboardWidth: firstFrame.width, artboardHeight: firstFrame.height }
-    : existing.meta
+  let updatedMeta = existing.meta
+  if (firstFrame) {
+    const thumbnail = generateThumbnail(
+      editor.getElementsForFrame(firstFrame.id),
+      firstFrame.width,
+      firstFrame.height,
+      firstFrame.backgroundColor
+    )
+    updatedMeta = {
+      ...existing.meta,
+      artboardWidth: firstFrame.width,
+      artboardHeight: firstFrame.height,
+      thumbnail,
+    }
+  }
   projects.saveProjectData(editor.projectId, {
     ...existing,
     meta: updatedMeta,
     frames: editor.frames,
     elements: editor.elements,
     keyframes: editor.keyframes,
+    motionPaths: editor.motionPaths,
   })
   saveState.value = 'saved'
   if (savedTimer) clearTimeout(savedTimer)
@@ -231,6 +331,7 @@ onBeforeUnmount(() => {
   if (saveTimer) clearTimeout(saveTimer)
   if (savedTimer) clearTimeout(savedTimer)
   timeline.stop()
+  if (motionPathTool.isDrawing.value) motionPathTool.cancel()
   save()
   editor.clearProject()
   ui.clearSelection()
@@ -296,6 +397,13 @@ const contextItems = computed(() => {
             ui.selectAll(childIds)
             history.save()
           }
+        })
+      }
+      // Convert text to path
+      if (selEl?.type === 'text') {
+        items.push({
+          label: 'Convert to Path',
+          action: () => convertSelectedTextToPath()
         })
       }
       // Crop
@@ -395,7 +503,7 @@ const contextItems = computed(() => {
 </script>
 
 <template>
-  <div class="editor">
+  <div class="editor" :class="{ 'theme-light': ui.editorTheme === 'light' }">
     <!-- Topbar -->
     <AppTopbar
       :project-name="meta?.name"
@@ -435,6 +543,8 @@ const contextItems = computed(() => {
           :path-editor="pathEditor"
           :crop-tool="cropTool"
           :transform-origin-composable="transformOriginComposable"
+          :motion-path-tool="motionPathTool"
+          :motion-path-editor="motionPathEditor"
           :artboard-width="activeFrame?.width ?? meta?.artboardWidth ?? 800"
           :artboard-height="activeFrame?.height ?? meta?.artboardHeight ?? 600"
         />

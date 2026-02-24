@@ -137,7 +137,7 @@ const fitStyle = computed(() => props.element.fit === 'fill' ? 'fill' : props.el
     <text
       :x="element.x + element.width / 2"
       :y="element.y + element.height / 2 + 6"
-      fill="#4b5563" font-size="9" text-anchor="middle" font-family="sans-serif"
+      fill="#4b5563" font-size="14" text-anchor="middle" font-family="sans-serif"
     >{{ element.fileName }}</text>
   </g>
 

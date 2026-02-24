@@ -47,6 +47,9 @@ export function useElementRotate(
         cy = bounds.y + bounds.height / 2
       }
     } else {
+      // Multi-select: always rotate around group bounding box center.
+      // Individual transform origins are only used for single-select rotation.
+      // This matches Figma/Illustrator behavior.
       cx = bounds.x + bounds.width / 2
       cy = bounds.y + bounds.height / 2
     }

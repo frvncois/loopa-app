@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectsStore } from '@/stores/projectsStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -44,6 +44,22 @@ function formatDate(ts: number) {
   return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+function sanitizeSvg(svg: string): string {
+  return svg
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/on\w+="[^"]*"/gi, '')
+    .replace(/on\w+='[^']*'/gi, '')
+    .replace(/javascript:/gi, '')
+}
+
+const thumbnailMap = computed(() => {
+  const map = new Map<string, string>()
+  for (const proj of projects.sortedProjects) {
+    if (proj.thumbnail) map.set(proj.id, sanitizeSvg(proj.thumbnail))
+  }
+  return map
+})
+
 function logout() {
   auth.logout()
   router.push('/login')
@@ -85,7 +101,7 @@ function logout() {
           @click="router.push(`/project/${proj.id}`)"
         >
           <div class="proj-thumb">
-            <img v-if="proj.thumbnail" :src="proj.thumbnail" alt="" />
+            <div v-if="thumbnailMap.get(proj.id)" class="proj-thumb-svg" v-html="thumbnailMap.get(proj.id)" />
             <div v-else class="proj-thumb-empty">
               <IconEmpty />
             </div>
@@ -196,7 +212,19 @@ function logout() {
   position: relative;
   overflow: hidden;
 }
-.proj-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.proj-thumb-svg {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.proj-thumb-svg :deep(svg) {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
 .proj-thumb-empty { display: flex; align-items: center; justify-content: center; }
 .proj-dims {
   position: absolute;

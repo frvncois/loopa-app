@@ -80,6 +80,28 @@ function makeTransform(el: Element, anim: AnimatableProps): string {
   return parts.join(' ')
 }
 
+// Group-specific transform: children live in absolute artboard coords, so position
+// animation is expressed as a translate delta. Rotation/scale use the BASE center
+// (before any translation) so children revolve around their original bounding box center.
+function makeGroupTransform(el: Element, anim: AnimatableProps): string {
+  const dx  = (anim.x ?? el.x) - el.x
+  const dy  = (anim.y ?? el.y) - el.y
+  const rot = anim.rotation ?? el.rotation
+  const sx  = (anim.scaleX ?? el.scaleX) * (el.flipX ? -1 : 1)
+  const sy  = (anim.scaleY ?? el.scaleY) * (el.flipY ? -1 : 1)
+  const oxN = (anim as any).transformOriginX ?? (el as any).transformOrigin?.x ?? 0.5
+  const oyN = (anim as any).transformOriginY ?? (el as any).transformOrigin?.y ?? 0.5
+  const cx  = r(el.x + oxN * el.width)
+  const cy  = r(el.y + oyN * el.height)
+  const parts: string[] = []
+  if (dx !== 0 || dy !== 0) parts.push(`translate(${r(dx)} ${r(dy)})`)
+  if (rot) parts.push(`rotate(${r(rot)} ${cx} ${cy})`)
+  if (sx !== 1 || sy !== 1) {
+    parts.push(`translate(${cx} ${cy}) scale(${r(sx)} ${r(sy)}) translate(${r(-cx)} ${r(-cy)})`)
+  }
+  return parts.join(' ')
+}
+
 function makeFilter(el: Element): string {
   const parts: string[] = []
   const shadow = el.shadows.find(s => s.visible)
@@ -96,11 +118,26 @@ function wrapG(inner: string, el: Element, anim: AnimatableProps, clipPathId?: s
   const transform = makeTransform(el, anim)
   const filter = makeFilter(el)
   const blend = el.blendMode !== 'normal' ? el.blendMode : ''
+  const rx3d = (anim as any).rotateX ?? (el as any).rotateX ?? 0
+  const ry3d = (anim as any).rotateY ?? (el as any).rotateY ?? 0
+  const has3d = rx3d !== 0 || ry3d !== 0
+
   const attrs: string[] = []
   if (opacity !== 1) attrs.push(`opacity="${r(opacity)}"`)
   if (transform) attrs.push(`transform="${transform}"`)
   if (filter) attrs.push(`filter="${filter}"`)
-  if (blend) attrs.push(`style="mix-blend-mode:${blend}"`)
+
+  const styleParts: string[] = []
+  if (blend) styleParts.push(`mix-blend-mode:${blend}`)
+  if (has3d) {
+    const p3d = (anim as any).perspective ?? (el as any).perspective ?? 800
+    const ox  = (el as any).transformOrigin?.x ?? 0.5
+    const oy  = (el as any).transformOrigin?.y ?? 0.5
+    styleParts.push(`transform-origin:${ox * 100}% ${oy * 100}%`)
+    styleParts.push(`transform:perspective(${p3d}px) rotateX(${rx3d}deg) rotateY(${ry3d}deg)`)
+    styleParts.push('transform-box:fill-box')
+  }
+  if (styleParts.length) attrs.push(`style="${styleParts.join(';')}"`)
   if (clipPathId) attrs.push(`clip-path="url(#${clipPathId})"`)
   const open = attrs.length ? `<g ${attrs.join(' ')}>` : '<g>'
   return `${open}${inner}</g>`
@@ -131,16 +168,18 @@ function serializeMaskShape(el: Element, anim: AnimatableProps): string {
       const rx = r((anim as any).rx ?? (el as any).rx ?? 0)
       return `<g${transformAttr}><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}"/></g>`
     }
-    case 'circle': {
-      const rv = r(Math.min(w, h) / 2)
-      return `<g${transformAttr}><circle cx="${r(Number(x) + Number(w) / 2)}" cy="${r(Number(y) + Number(h) / 2)}" r="${rv}"/></g>`
-    }
     case 'ellipse': {
       return `<g${transformAttr}><ellipse cx="${r(Number(x) + Number(w) / 2)}" cy="${r(Number(y) + Number(h) / 2)}" rx="${r(Number(w) / 2)}" ry="${r(Number(h) / 2)}"/></g>`
     }
     case 'path': {
       const d = (anim as any).d ?? (el as any).d ?? ''
-      return d ? `<g${transformAttr}><path d="${d}"/></g>` : ''
+      if (!d) return ''
+      if ((el as any).relativePoints) {
+        const px = r(anim.x ?? el.x)
+        const py = r(anim.y ?? el.y)
+        return `<g${transformAttr}><g transform="translate(${px} ${py})"><path d="${d}"/></g></g>`
+      }
+      return `<g${transformAttr}><path d="${d}"/></g>`
     }
     default:
       return `<g${transformAttr}><rect x="${x}" y="${y}" width="${w}" height="${h}"/></g>`
@@ -161,17 +200,6 @@ function serializeRect(el: Element, anim: AnimatableProps): string {
   const h = r(anim.height ?? el.height)
   const rx = r(anim.rx    ?? e.rx)
   return wrapG(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" ${fillStroke(el, anim)}/>`, el, anim, cropId(el))
-}
-
-function serializeCircle(el: Element, anim: AnimatableProps): string {
-  const x  = anim.x      ?? el.x
-  const y  = anim.y      ?? el.y
-  const w  = anim.width  ?? el.width
-  const h  = anim.height ?? el.height
-  const rv = r(Math.min(w, h) / 2)
-  const cx = r(x + w / 2)
-  const cy = r(y + h / 2)
-  return wrapG(`<circle cx="${cx}" cy="${cy}" r="${rv}" ${fillStroke(el, anim)}/>`, el, anim, cropId(el))
 }
 
 function serializeEllipse(el: Element, anim: AnimatableProps): string {
@@ -261,6 +289,12 @@ function serializePath(el: Element, anim: AnimatableProps): string {
   const sc = stroke ? stroke.color : (e.closed ? 'none' : fill.color)
   const sw = stroke ? stroke.width : 2
   const scAttr = `stroke="${sc}" stroke-width="${r(sw)}" stroke-linecap="round" fill-rule="${e.fillRule}"`
+  // Relative-coord paths need a translate wrapper to position the local-space d correctly
+  if (e.relativePoints) {
+    const px = r(anim.x ?? el.x)
+    const py = r(anim.y ?? el.y)
+    return wrapG(`<g transform="translate(${px} ${py})"><path d="${d}" fill="${fillVal}"${foAttr} ${scAttr}/></g>`, el, anim, cropId(el))
+  }
   return wrapG(`<path d="${d}" fill="${fillVal}"${foAttr} ${scAttr}/>`, el, anim, cropId(el))
 }
 
@@ -299,7 +333,7 @@ function serializeGroup(el: Element, anim: AnimatableProps, allElements: Element
       : ''
     // The mask shape itself is invisible in the export (its geometry only appears in the clipPath)
     const inner = `${clipDef}${clippedGroup}`
-    return wrapG(inner, el, anim)
+    return wrapGroupG(inner, el, anim)
   }
 
   const inner = group.childIds
@@ -309,7 +343,24 @@ function serializeGroup(el: Element, anim: AnimatableProps, allElements: Element
       return serializeElement(child, states.get(child.id) ?? {}, allElements, states)
     })
     .join('')
-  return wrapG(inner, el, anim)
+  return wrapGroupG(inner, el, anim)
+}
+
+// Like wrapG but uses makeGroupTransform so group position animation translates children.
+// Groups store children at absolute artboard coordinates, so x/y animation must be
+// expressed as a translate delta rather than baked into child shape attributes.
+function wrapGroupG(inner: string, el: Element, anim: AnimatableProps): string {
+  const opacity = anim.opacity ?? el.opacity
+  const transform = makeGroupTransform(el, anim)
+  const filter = makeFilter(el)
+  const blend = el.blendMode !== 'normal' ? el.blendMode : ''
+  const attrs: string[] = []
+  if (opacity !== 1) attrs.push(`opacity="${r(opacity)}"`)
+  if (transform) attrs.push(`transform="${transform}"`)
+  if (filter) attrs.push(`filter="${filter}"`)
+  if (blend) attrs.push(`style="mix-blend-mode:${blend}"`)
+  const open = attrs.length ? `<g ${attrs.join(' ')}>` : '<g>'
+  return `${open}${inner}</g>`
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -324,7 +375,6 @@ export function serializeElement(
   if (!el.visible) return ''
   switch (el.type) {
     case 'rect':     return serializeRect(el, anim)
-    case 'circle':   return serializeCircle(el, anim)
     case 'ellipse':  return serializeEllipse(el, anim)
     case 'line':     return serializeLine(el, anim)
     case 'polygon':  return serializePolygon(el, anim)

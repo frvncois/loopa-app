@@ -1,6 +1,7 @@
 import type { Element } from './elements'
 import type { Keyframe } from './animation'
 import type { Frame } from './frame'
+import type { MotionPath } from './motionPath'
 
 export interface ProjectMeta {
   id: string
@@ -16,8 +17,9 @@ export interface ProjectMeta {
 export interface ProjectData {
   meta: ProjectMeta
   frames: Frame[]
-  elements: Element[]   // ALL elements across all frames (flat)
-  keyframes: Keyframe[] // ALL keyframes across all frames
+  elements: Element[]       // ALL elements across all frames (flat)
+  keyframes: Keyframe[]     // ALL keyframes across all frames
+  motionPaths?: MotionPath[] // ALL motion paths across all frames
   // Legacy migration fields (present in old saves only)
   fps?: number
   totalFrames?: number

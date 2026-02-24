@@ -20,6 +20,7 @@ defineProps<{
   height: 100%;
   background: var(--bg-2);
   border-top: 1px solid var(--border);
+  user-select: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;

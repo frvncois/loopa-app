@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, inject } from 'vue'
-import type { ComputedRef } from 'vue'
+import type { ComputedRef, Ref } from 'vue'
 import type { Element, GroupElement } from '@/types/elements'
 import type { AnimatableProps } from '@/types/animation'
 import { useEditorStore } from '@/stores/editorStore'
@@ -27,6 +27,18 @@ const animatedPropsMap = inject<ComputedRef<Map<string, AnimatableProps>>>('anim
 // Injected from CanvasViewport to delegate child events when inside an entered group
 const onElementMouseDown = inject<(e: MouseEvent, id: string) => void>('onElementMouseDown')
 const onElementDblClick = inject<(e: MouseEvent, id: string) => void>('onElementDblClick')
+
+// Injected text edit state for inline text editing
+interface TextEditState {
+  editingTextId: Ref<string | null>
+  editingTextValue: Ref<string>
+  commitTextEdit: () => void
+  cancelTextEdit: () => void
+  onTextEditorInput: (e: Event) => void
+  onTextEditorKeyDown: (e: KeyboardEvent) => void
+  measureAndUpdateTextBounds: (id: string) => void
+}
+const textEditState = inject<TextEditState>('textEditState')
 
 const el = computed(() => ({
   ...props.element,
@@ -72,10 +84,21 @@ function resolveOrigin(e: typeof el.value) {
 
 const transform = computed(() => {
   const e = el.value
+  const base = props.element
   const origin = resolveOrigin(e)
-  const cx = e.x + origin.x * e.width
-  const cy = e.y + origin.y * e.height
+  // Groups have children at absolute artboard coords — use the base (non-animated) position
+  // as the rotation/scale center, and express position animation as a translate delta.
+  // Non-group elements position themselves via their own shape attributes (x/y), so the
+  // rotation center uses the animated position directly.
+  const isGroup = base.type === 'group'
+  const cx = isGroup ? (base.x + origin.x * base.width)  : (e.x + origin.x * e.width)
+  const cy = isGroup ? (base.y + origin.y * base.height) : (e.y + origin.y * e.height)
   const parts = []
+  if (isGroup) {
+    const dx = e.x - base.x
+    const dy = e.y - base.y
+    if (dx !== 0 || dy !== 0) parts.push(`translate(${dx} ${dy})`)
+  }
   if (e.rotation) parts.push(`rotate(${e.rotation} ${cx} ${cy})`)
   if (e.scaleX !== 1 || e.scaleY !== 1 || e.flipX || e.flipY) {
     const sx = (e.scaleX ?? 1) * (e.flipX ? -1 : 1)
@@ -108,6 +131,32 @@ const filterAttr = computed(() => {
 const displayOpacity = computed(() => {
   if (props.maskOutline) return 0.7
   return el.value.opacity * (props.isDimmed ? 0.4 : 1)
+})
+
+// 3D CSS transform — active when rotateX or rotateY != 0
+const cssTransform3d = computed((): Record<string, string> | undefined => {
+  const e = el.value
+  const rx3d = (e as any).rotateX ?? 0
+  const ry3d = (e as any).rotateY ?? 0
+  if (rx3d === 0 && ry3d === 0) return undefined
+
+  const p  = (e as any).perspective ?? 800
+  const ox = (e as any).transformOriginX ?? (e as any).transformOrigin?.x ?? 0.5
+  const oy = (e as any).transformOriginY ?? (e as any).transformOrigin?.y ?? 0.5
+  const rz = (e as any).rotation ?? 0
+  const sx = ((e as any).scaleX ?? 1) * ((e as any).flipX ? -1 : 1)
+  const sy = ((e as any).scaleY ?? 1) * ((e as any).flipY ? -1 : 1)
+
+  const t: string[] = [`perspective(${p}px)`]
+  if (rz) t.push(`rotateZ(${rz}deg)`)
+  t.push(`rotateX(${rx3d}deg)`, `rotateY(${ry3d}deg)`)
+  if (sx !== 1 || sy !== 1) t.push(`scale(${sx}, ${sy})`)
+
+  return {
+    'transform-origin': `${ox * 100}% ${oy * 100}%`,
+    'transform': t.join(' '),
+    'transform-box': 'fill-box',
+  }
 })
 
 // Crop rect clipping
@@ -165,12 +214,15 @@ const maskClipShape = computed((): ClipShape | null => {
   switch (mse.type) {
     case 'rect':
       return { tag: 'rect', attrs: { x, y, width: w, height: h, rx: (mse as any).rx ?? 0, transform: transformAttr } }
-    case 'circle':
-      return { tag: 'circle', attrs: { cx: x + w / 2, cy: y + h / 2, r: Math.min(w, h) / 2, transform: transformAttr } }
     case 'ellipse':
       return { tag: 'ellipse', attrs: { cx: x + w / 2, cy: y + h / 2, rx: w / 2, ry: h / 2, transform: transformAttr } }
-    case 'path':
-      return { tag: 'path', attrs: { d: (anim.d as string | undefined) ?? (mse as any).d ?? '', fill: 'black', transform: transformAttr } }
+    case 'path': {
+      // Path d uses relative coords when relativePoints is set — add translate to position it
+      const pathIsRelative = (mse as any).relativePoints
+      const pathTranslate = pathIsRelative ? `translate(${x} ${y})` : undefined
+      const pathTransform = [pathTranslate, transformAttr].filter(Boolean).join(' ') || undefined
+      return { tag: 'path', attrs: { d: (anim.d as string | undefined) ?? (mse as any).d ?? '', fill: 'black', transform: pathTransform } }
+    }
     case 'polygon':
       return { tag: 'polygon', attrs: { points: polygonPoints(x + w/2, y + h/2, Math.min(w, h)/2, (mse as any).sides ?? 6), transform: transformAttr } }
     case 'star':
@@ -198,9 +250,9 @@ function handleChildDblClick(e: MouseEvent, childId: string) {
   <g
     v-if="element.visible"
     :opacity="displayOpacity"
-    :transform="transform"
+    :transform="cssTransform3d ? undefined : transform"
     :filter="filterAttr"
-    :style="{ cursor: 'move' }"
+    :style="cssTransform3d ? { cursor: 'move', ...cssTransform3d } : { cursor: 'move' }"
   >
     <!-- Crop clipPath definition — must be a sibling of (not inside) the element that references it -->
     <defs v-if="cropClipId && element.cropRect">
@@ -224,19 +276,6 @@ function handleChildDblClick(e: MouseEvent, childId: string) {
         :width="el.width"
         :height="el.height"
         :rx="(element as any).rx ?? 0"
-        :fill="fillAttr"
-        :fill-opacity="fillOpacity"
-        :stroke="strokeAttr"
-        :stroke-width="strokeWidth"
-        :stroke-dasharray="strokeDashArray"
-      />
-
-      <!-- Circle -->
-      <circle
-        v-else-if="element.type === 'circle'"
-        :cx="el.x + el.width / 2"
-        :cy="el.y + el.height / 2"
-        :r="Math.min(el.width, el.height) / 2"
         :fill="fillAttr"
         :fill-opacity="fillOpacity"
         :stroke="strokeAttr"
@@ -293,29 +332,92 @@ function handleChildDblClick(e: MouseEvent, childId: string) {
         :stroke-dasharray="strokeDashArray"
       />
 
-      <!-- Text -->
-      <text
-        v-else-if="element.type === 'text'"
-        :x="el.x"
-        :y="el.y + ((element as any).fontSize ?? 24)"
-        :font-family="(element as any).fontFamily ?? 'DM Sans'"
-        :font-size="(element as any).fontSize ?? 24"
-        :font-weight="(element as any).fontWeight ?? 400"
-        :fill="fillAttr"
-        :fill-opacity="fillOpacity"
-      >{{ (element as any).text ?? 'Text' }}</text>
+      <!-- Text: multiline SVG (hidden while editing) + foreignObject inline editor -->
+      <template v-else-if="element.type === 'text'">
+        <!-- Multiline SVG text via tspan per line; dominant-baseline="hanging" → y is top of text -->
+        <text
+          v-if="textEditState?.editingTextId.value !== element.id"
+          :data-id="element.id"
+          :x="el.x"
+          :y="el.y"
+          :font-family="(element as any).fontFamily ?? 'DM Sans'"
+          :font-size="(element as any).fontSize ?? 24"
+          :font-weight="(element as any).fontWeight ?? 400"
+          :fill="fillAttr"
+          :fill-opacity="fillOpacity"
+          dominant-baseline="hanging"
+        >
+          <tspan
+            v-for="(line, li) in ((element as any).text ?? 'Text').split('\n')"
+            :key="li"
+            :x="el.x"
+            :dy="li === 0 ? 0 : ((element as any).fontSize ?? 24) * 1.25"
+          >{{ line || '\u00A0' }}</tspan>
+        </text>
 
-      <!-- Path -->
-      <path
-        v-else-if="element.type === 'path' && (element as any).d"
-        :d="(element as any).d"
-        :fill="(element as any).closed ? fillAttr : 'none'"
-        :fill-opacity="fillOpacity"
-        :stroke="strokeAttr !== 'none' ? strokeAttr : (!(element as any).closed ? fillAttr : 'none')"
-        :stroke-width="strokeWidth || 2"
-        :stroke-dasharray="strokeDashArray"
-        stroke-linecap="round"
-      />
+        <!-- Inline editor: foreignObject in SVG coordinate space → font size & position match exactly -->
+        <foreignObject
+          v-if="textEditState?.editingTextId.value === element.id"
+          :x="el.x"
+          :y="el.y"
+          width="4000"
+          height="4000"
+          style="overflow: visible; pointer-events: none"
+        >
+          <div
+            xmlns="http://www.w3.org/1999/xhtml"
+            id="canvas-text-editor"
+            contenteditable="true"
+            spellcheck="false"
+            :style="{
+              fontSize: ((element as any).fontSize ?? 24) + 'px',
+              fontFamily: (element as any).fontFamily ?? 'DM Sans',
+              fontWeight: (element as any).fontWeight ?? 400,
+              color: fillAttr !== 'none' ? fillAttr : '#ededf0',
+              background: 'none',
+              border: 'none',
+              outline: '1.5px solid var(--accent, #4353ff)',
+              outlineOffset: '4px',
+              borderRadius: '2px',
+              padding: '0',
+              margin: '0',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'keep-all',
+              minWidth: '20px',
+              minHeight: ((element as any).fontSize ?? 24) + 'px',
+              display: 'inline-block',
+              lineHeight: '1.25',
+              cursor: 'text',
+              caretColor: 'var(--accent, #4353ff)',
+              pointerEvents: 'auto',
+              userSelect: 'text',
+            }"
+            @input="textEditState?.onTextEditorInput($event)"
+            @keydown.stop="textEditState?.onTextEditorKeyDown($event as KeyboardEvent)"
+            @mousedown.stop
+            @click.stop
+            @dblclick.stop
+            @blur="textEditState?.commitTextEdit()"
+          ></div>
+        </foreignObject>
+      </template>
+
+      <!-- Path (relative coords: translate to el.x/el.y, d uses local space) -->
+      <g
+        v-else-if="element.type === 'path'"
+        :transform="(element as any).relativePoints ? `translate(${el.x} ${el.y})` : undefined"
+      >
+        <path
+          v-if="(element as any).d"
+          :d="(el as any).d ?? (element as any).d"
+          :fill="(element as any).closed ? fillAttr : 'none'"
+          :fill-opacity="fillOpacity"
+          :stroke="strokeAttr !== 'none' ? strokeAttr : (!(element as any).closed ? fillAttr : 'none')"
+          :stroke-width="strokeWidth || 2"
+          :stroke-dasharray="strokeDashArray"
+          stroke-linecap="round"
+        />
+      </g>
 
       <!-- Video -->
       <CanvasVideo
@@ -374,12 +476,13 @@ function handleChildDblClick(e: MouseEvent, childId: string) {
           </g>
         </template>
 
-        <!-- REGULAR GROUP: render all children -->
+        <!-- REGULAR GROUP: render all children with their own animated props -->
         <template v-else>
           <ElementRenderer
             v-for="childId in (element as GroupElement).childIds"
             :key="childId"
             :element="editorStore.getElementById(childId)!"
+            :animated-props="animatedPropsMap?.get(childId)"
             :is-dimmed="ui.activeGroupId === element.id && !ui.selectedIds.has(childId) && ui.selectedIds.size > 0"
             @mousedown="handleChildMouseDown($event, childId)"
             @dblclick="handleChildDblClick($event, childId)"

@@ -7,7 +7,9 @@ import type { useSelection } from '@/composables/useSelection'
 import type { useCanvas } from '@/composables/useCanvas'
 import type { useCropTool } from '@/composables/useCropTool'
 import type { useMasking } from '@/composables/useMasking'
-import type { GroupElement } from '@/types/elements'
+import type { useMotionPathTool } from '@/composables/useMotionPathTool'
+import type { GroupElement, Element } from '@/types/elements'
+import type { AnimatableProps } from '@/types/animation'
 
 export function useShortcuts(
   editor: ReturnType<typeof useEditorStore>,
@@ -18,7 +20,10 @@ export function useShortcuts(
   selection: ReturnType<typeof useSelection>,
   canvas: ReturnType<typeof useCanvas>,
   cropTool?: ReturnType<typeof useCropTool>,
-  masking?: ReturnType<typeof useMasking>
+  masking?: ReturnType<typeof useMasking>,
+  getAnimatedEl?: (id: string) => Element | null,
+  setAnimatedProp?: (id: string, props: Partial<AnimatableProps>) => void,
+  motionPathTool?: ReturnType<typeof useMotionPathTool>
 ) {
   function isTyping(): boolean {
     const el = document.activeElement
@@ -30,6 +35,9 @@ export function useShortcuts(
 
   function onKeyDown(e: KeyboardEvent) {
     if (isTyping()) return
+
+    // Motion path tool intercepts ALL key events while drawing
+    if (motionPathTool?.onKeyDown(e)) return
 
     const cmd = e.metaKey || e.ctrlKey
 
@@ -141,7 +149,6 @@ export function useShortcuts(
       // Tools
       case 'v': case 'V': ui.setTool('select'); return
       case 'r': case 'R': ui.setTool('rect'); return
-      case 'c': case 'C': ui.setTool('circle'); return
       case 'e': case 'E': ui.setTool('ellipse'); return
       case 'l': case 'L': ui.setTool('line'); return
       case 'p': case 'P': ui.setTool('pen'); return
@@ -232,9 +239,13 @@ export function useShortcuts(
         const dx = e.key === 'ArrowLeft' ? -dist : e.key === 'ArrowRight' ? dist : 0
         const dy = e.key === 'ArrowUp' ? -dist : e.key === 'ArrowDown' ? dist : 0
         for (const id of ui.selectedIds) {
-          const el = editor.elements.find(el => el.id === id)
+          const el = getAnimatedEl ? getAnimatedEl(id) : editor.elements.find(el => el.id === id)
           if (!el) continue
-          editor.updateElement(id, { x: el.x + dx, y: el.y + dy })
+          if (setAnimatedProp) {
+            setAnimatedProp(id, { x: el.x + dx, y: el.y + dy })
+          } else {
+            editor.updateElement(id, { x: el.x + dx, y: el.y + dy })
+          }
         }
         history.saveDebounced()
         return

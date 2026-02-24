@@ -23,7 +23,8 @@ export function useAiAssistant(history: ReturnType<typeof useHistory>) {
   const messages = ref<Message[]>([])
   const inputText = ref('')
 
-  const hasApiKey = computed(() => !!import.meta.env.VITE_OPENAI_API_KEY)
+  // Key lives in Supabase Edge Function secrets — always available when authenticated
+  const hasApiKey = computed(() => true)
 
   function toggle() { isOpen.value = !isOpen.value }
   function open()   { isOpen.value = true }
@@ -88,17 +89,6 @@ export function useAiAssistant(history: ReturnType<typeof useHistory>) {
     messages.value.push(userMsg)
     isLoading.value = true
 
-    // Check for key before making API call
-    if (!hasApiKey.value) {
-      messages.value.push({
-        id: `${Date.now()}-a`,
-        role: 'assistant',
-        content: 'OpenAI API key not configured. Add VITE_OPENAI_API_KEY to your .env.local file to use the assistant.',
-      })
-      isLoading.value = false
-      return
-    }
-
     try {
       const context = getProjectContext()
       // Build conversation history excluding the message we just appended
@@ -118,9 +108,7 @@ export function useAiAssistant(history: ReturnType<typeof useHistory>) {
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      const displayMsg = msg === 'OPENAI_KEY_MISSING'
-        ? 'OpenAI API key not configured. Add VITE_OPENAI_API_KEY to .env.local.'
-        : `Something went wrong: ${msg}`
+      const displayMsg = `Something went wrong: ${msg}`
       messages.value.push({
         id: `${Date.now()}-a`,
         role: 'assistant',
